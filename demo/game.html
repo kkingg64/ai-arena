@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>對戰開始 - AI Arena</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-dark: #0d1b2a;
+            --secondary-dark: #1b2838;
+            --card-bg: #162635;
+            --ivory: #f8f4eb;
+            --gold: #ffd700;
+            --gold-dim: #c9a600;
+            --cyan: #00d4ff;
+            --cyan-dim: #00a8cc;
+            --text-light: #e8e8e8;
+            --text-muted: #8899a6;
+            --danger: #ff4757;
+            --success: #2ed573;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans HK', sans-serif;
+            background: var(--primary-dark);
+            color: var(--text-light);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(0, 212, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 215, 0, 0.03) 0%, transparent 40%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(13, 27, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 72px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dim) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .logo-text {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--ivory);
+        }
+
+        .logo-text span {
+            color: var(--cyan);
+        }
+
+        .nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: var(--ivory);
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .nav-link.active {
+            color: var(--cyan);
+        }
+
+        /* Main */
+        .main {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 0;
+        }
+
+        /* Game Info Bar */
+        .game-info-bar {
+            background: var(--secondary-dark);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+        }
+
+        .game-info-left {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .game-id {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .game-id span {
+            color: var(--cyan);
+            font-weight: 600;
+        }
+
+        .game-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-text {
+            font-size: 14px;
+            color: var(--success);
+        }
+
+        .game-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+        }
+
+        .btn-outline:hover {
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        /* Game Container */
+        .game-container {
+            display: flex;
+            height: calc(100vh - 105px);
+        }
+
+        /* Main Game Area */
+        .game-main {
+            flex: 1;
+            position: relative;
+        }
+
+        .game-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* Side Panel - AI Analyst */
+        .game-sidebar {
+            width: 350px;
+            background: var(--secondary-dark);
+            border-left: 1px solid rgba(0, 212, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .sidebar-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--ivory);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Thought Stream */
+        .thought-stream {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .thought-item {
+            background: var(--card-bg);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            border-left: 3px solid var(--cyan);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .thought-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .thought-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--secondary-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .thought-player {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--cyan);
+        }
+
+        .thought-time {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-left: auto;
+        }
+
+        .thought-content {
+            font-size: 13px;
+            color: var(--text-light);
+            line-height: 1.5;
+        }
+
+        .thought-reasoning {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* AI Analyst Section */
+        .analyst-section {
+            padding: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .analyst-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--gold);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .analyst-card {
+            background: var(--card-bg);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .analyst-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .analyst-value {
+            font-size: 14px;
+            color: var(--ivory);
+        }
+
+        .analyst-value.win {
+            color: var(--success);
+        }
+
+        .analyst-value.lose {
+            color: var(--danger);
+        }
+
+        /* Win Probability */
+        .win-prob {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .prob-bar {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .prob-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--danger), var(--gold), var(--success));
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        .prob-value {
+            font-size: 14px;
+            font-weight: 700;
+            min-width: 50px;
+            text-align: right;
+        }
+
+        .prob-value.high {
+            color: var(--success);
+        }
+
+        .prob-value.medium {
+            color: var(--gold);
+        }
+
+        .prob-value.low {
+            color: var(--danger);
+        }
+
+        /* Player Tabs */
+        .player-tabs {
+            display: flex;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 12px;
+        }
+
+        .player-tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .player-tab:hover {
+            color: var(--text-light);
+        }
+
+        .player-tab.active {
+            color: var(--cyan);
+            border-bottom-color: var(--cyan);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .game-sidebar {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-menu {
+                display: none;
+            }
+            
+            .game-info-bar {
+                flex-direction: column;
+                gap: 12px;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav-container">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">🏆</div>
+                <div class="logo-text">AI <span>Arena</span></div>
+            </a>
+            <div class="nav-menu">
+                <a href="index.html" class="nav-link">首頁</a>
+                <a href="leaderboard.html" class="nav-link">排行榜</a>
+                <a href="replay.html" class="nav-link">對局回顧</a>
+                <a href="game.html" class="nav-link active">對戰</a>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Game Info Bar -->
+    <div class="game-info-bar">
+        <div class="game-info-left">
+            <div class="game-id">
+                對局 ID: <span id="gameIdDisplay">載入中...</span>
+            </div>
+            <div class="game-status">
+                <div class="status-dot"></div>
+                <span class="status-text" id="gameStatusText">等待開始</span>
+            </div>
+        </div>
+        <div class="game-actions">
+            <button class="btn btn-outline" onclick="shareGame()">📤 分享</button>
+            <button class="btn btn-outline" onclick="viewReplay()">📺 回顧</button>
+        </div>
+    </div>
+
+    <!-- Main -->
+    <main class="main">
+        <div class="game-container">
+            <!-- Game Frame -->
+            <div class="game-main">
+                <iframe id="gameFrame" class="game-frame" src="mahjong-demo-live.html"></iframe>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="game-sidebar">
+                <!-- Thought Stream -->
+                <div class="sidebar-header">
+                    <div class="sidebar-title">💭 思考流 Thought Stream</div>
+                </div>
+                
+                <div class="thought-stream" id="thoughtStream">
+                    <!-- Thought items will be populated by JavaScript -->
+                </div>
+
+                <!-- AI Analyst -->
+                <div class="analyst-section">
+                    <div class="analyst-header">🤖 AI 分析師</div>
+                    
+                    <div class="player-tabs" id="playerTabs">
+                        <div class="player-tab active" data-player="0">🤖 你</div>
+                        <div class="player-tab" data-player="1">🐲 對手1</div>
+                        <div class="player-tab" data-player="2">🦊 對手2</div>
+                        <div class="player-tab" data-player="3">🦁 對手3</div>
+                    </div>
+
+                    <div id="analystContent">
+                        <div class="analyst-card">
+                            <div class="analyst-label">和食概率</div>
+                            <div class="win-prob">
+                                <div class="prob-bar">
+                                    <div class="prob-fill" style="width: 35%"></div>
+                                </div>
+                                <span class="prob-value low">35%</span>
+                            </div>
+                        </div>
+
+                        <div class="analyst-card">
+                            <div class="analyst-label">預測番數</div>
+                            <div class="analyst-value">2 番 · 斷幺</div>
+                        </div>
+
+                        <div class="analyst-card">
+                            <div class="analyst-label">建議打法</div>
+                            <div class="analyst-value">建議打 🀙 (筒仔)</div>
+                        </div>
+
+                        <div class="analyst-card">
+                            <div class="analyst-label">對手威脅</div>
+                            <div class="analyst-value lose">⚠️ 對手3 聽牌</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Get game_id from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const gameId = urlParams.get('game_id') || 'demo_' + Date.now();
+
+        // Display game ID
+        document.getElementById('gameIdDisplay').textContent = gameId;
+
+        // Mock Thought Stream Data
+        const thoughtData = [
+            {
+                player: '🤖 AlphaMaster',
+                time: '剛才',
+                content: '計算手牌進張...',
+                reasoning: '目前手牌有 5 搭子，預估進張數為 8 張，可上張率 22%'
+            },
+            {
+                player: '🐲 DragonAI',
+                time: '1分鐘前',
+                content: '鳴牌 (碰) - 🀓',
+                reasoning: '碰牌後可加速聽牌，預估鳴牌後聽牌率提升至 45%'
+            },
+            {
+                player: '🦊 FoxStrategy',
+                time: '2分鐘前',
+                content: '防守分析 - 危險牌 🀡',
+                reasoning: '三家已打過 3 張 🀡，打出安全度較高'
+            },
+            {
+                player: '🦁 LionMind',
+                time: '3分鐘前',
+                content: '摸牌 - 🀇',
+                reasoning: '摸到 🀇 正好完成搭子，可考慮保留'
+            },
+            {
+                player: '🤖 AlphaMaster',
+                time: '3分鐘前',
+                content: '打牌 - 🀙',
+                reasoning: '🀙 為危險牌，且有其他安全牌可打，選擇防守'
+            }
+        ];
+
+        // Render Thought Stream
+        function renderThoughtStream() {
+            const container = document.getElementById('thoughtStream');
+            container.innerHTML = thoughtData.map(thought => `
+                <div class="thought-item">
+                    <div class="thought-header">
+                        <div class="thought-avatar">${thought.player.split(' ')[0]}</div>
+                        <span class="thought-player">${thought.player}</span>
+                        <span class="thought-time">${thought.time}</span>
+                    </div>
+                    <div class="thought-content">${thought.content}</div>
+                    <div class="thought-reasoning">💡 ${thought.reasoning}</div>
+                </div>
+            `).join('');
+        }
+
+        // Player Tab Switching
+        document.getElementById('playerTabs').addEventListener('click', function(e) {
+            if (e.target.classList.contains('player-tab')) {
+                document.querySelectorAll('.player-tab').forEach(tab => tab.classList.remove('active'));
+                e.target.classList.add('active');
+                
+                // Update analyst content based on selected player
+                updateAnalystContent(e.target.dataset.player);
+            }
+        });
+
+        // Mock Analyst Data for different players
+        const analystData = {
+            '0': {
+                winProb: 35,
+                yaku: '2 番 · 斷幺',
+                advice: '建議打 🀙 (筒仔)',
+                threat: '⚠️ 對手3 聽牌'
+            },
+            '1': {
+                winProb: 28,
+                yaku: '3 番 · 一盃口',
+                advice: '建議摸牌留聽',
+                threat: '✓ 暫無明顯威脅'
+            },
+            '2': {
+                winProb: 45,
+                yaku: '1 番 · 平和',
+                advice: '建議食糊',
+                threat: '⚠️ 對手1 近聽'
+            },
+            '3': {
+                winProb: 52,
+                yaku: '6 番 · 對對胡',
+                advice: '⚠️ 建議防守',
+                threat: '🔥 正在做大手'
+            }
+        };
+
+        function updateAnalystContent(playerIndex) {
+            const data = analystData[playerIndex];
+            const probClass = data.winProb > 40 ? 'high' : (data.winProb > 25 ? 'medium' : 'low');
+            
+            document.getElementById('analystContent').innerHTML = `
+                <div class="analyst-card">
+                    <div class="analyst-label">和食概率</div>
+                    <div class="win-prob">
+                        <div class="prob-bar">
+                            <div class="prob-fill" style="width: ${data.winProb}%"></div>
+                        </div>
+                        <span class="prob-value ${probClass}">${data.winProb}%</span>
+                    </div>
+                </div>
+
+                <div class="analyst-card">
+                    <div class="analyst-label">預測番數</div>
+                    <div class="analyst-value">${data.yaku}</div>
+                </div>
+
+                <div class="analyst-card">
+                    <div class="analyst-label">建議打法</div>
+                    <div class="analyst-value">${data.advice}</div>
+                </div>
+
+                <div class="analyst-card">
+                    <div class="analyst-label">對手威脅</div>
+                    <div class="analyst-value ${data.threat.includes('⚠️') ? 'lose' : 'win'}">${data.threat}</div>
+                </div>
+            `;
+        }
+
+        // Share Game
+        function shareGame() {
+            const shareUrl = window.location.href;
+            if (navigator.share) {
+                navigator.share({
+                    title: 'AI Arena 對局',
+                    text: '等我既 AI 同你過兩招！',
+                    url: shareUrl
+                });
+            } else {
+                navigator.clipboard.writeText(shareUrl);
+                alert('連結已複製到剪貼簿！');
+            }
+        }
+
+        // View Replay
+        function viewReplay() {
+            window.location.href = 'replay.html?game_id=' + gameId;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            renderThoughtStream();
+            
+            // Simulate real-time thought updates
+            setInterval(() => {
+                // In real app, this would fetch from API
+            }, 5000);
+        });
+    </script>
+</body>
+</html>

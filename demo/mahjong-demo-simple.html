@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🀄 AI Mahjong Arena - Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0f; }
+        #container { width: 100%; height: 100%; }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 25px;
+            color: #888;
+            font-family: 'Noto Sans HK', sans-serif;
+            font-size: 14px;
+            z-index: 100;
+        }
+        #controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+        .btn {
+            background: linear-gradient(135deg, #00d4ff, #0088aa);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: 'Noto Sans HK', sans-serif;
+        }
+        .btn:hover { transform: scale(1.05); }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;700;900&display=swap" rel="stylesheet">
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="container"></div>
+    <div id="info">🀄 AI Mahjong Arena | Phase: Ready</div>
+    <div id="controls">
+        <button class="btn" id="startBtn">🎮 開始遊戲</button>
+        <button class="btn" id="resetBtn">🔄 重新開始</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ============== GLOBALS ==============
+        let scene, camera, renderer, controls;
+        let tiles = [], handTiles = [], discardTiles = [], wallTiles = [];
+        let selectedTile = null;
+        
+        const TILE_W = 0.3, TILE_H = 0.4, TILE_D = 0.2;
+        const TILE_GAP = 0.002;  // Tighter gap for hands
+        const DISCARD_GAP = 0.005;  // Gap for discards to prevent Z-fighting
+        
+        const SUITS = { '萬': {c:'#1a5c1a'}, '筒':{c:'#1a1a5c'}, '索':{c:'#5c1a1a'}, '番子':{c:'#1a5c1a'}, '字':{c:'#1a5c1a'} };
+
+        // ============== INIT ==============
+        function init() {
+            const container = document.getElementById('container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0f);
+            scene.fog = new THREE.Fog(0x0a0a0f, 12, 35);
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 14, 16);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 10;
+            controls.maxDistance = 28;
+            controls.maxPolarAngle = Math.PI / 2.05;
+            controls.target.set(0, 0, 0);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 0.65);
+            scene.add(ambient);
+
+            const spot = new THREE.SpotLight(0xffffff, 2.2);
+            spot.position.set(0, 22, 0);
+            spot.angle = 0.45;
+            spot.penumbra = 0.25;
+            spot.castShadow = true;
+            spot.shadow.mapSize.set(2048, 2048);
+            spot.shadow.bias = -0.0001;
+            scene.add(spot);
+
+            const blue = new THREE.PointLight(0x4488ff, 0.45);
+            blue.position.set(7, 7, 7);
+            scene.add(blue);
+
+            const orange = new THREE.PointLight(0xff8844, 0.45);
+            orange.position.set(-7, 7, -7);
+            scene.add(orange);
+
+            // Table
+            const tableGeo = new THREE.PlaneGeometry(16, 16);
+            const tableMat = new THREE.MeshStandardMaterial({ color: 0x0d1b2a, roughness: 0.7, metalness: 0.08 });
+            const table = new THREE.Mesh(tableGeo, tableMat);
+            table.rotation.x = -Math.PI / 2;
+            table.position.y = -0.12;
+            table.receiveShadow = true;
+            scene.add(table);
+
+            // Shadow plane
+            const shadowMat = new THREE.ShadowMaterial({ opacity: 0.65 });
+            const shadow = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), shadowMat);
+            shadow.rotation.x = -Math.PI / 2;
+            shadow.position.y = -0.11;
+            shadow.receiveShadow = true;
+            scene.add(shadow);
+
+            createCentralHub();
+            createWall();
+            createDemoTiles();
+
+            window.addEventListener('resize', onResize);
+            animate();
+
+            document.getElementById('startBtn').addEventListener('click', startGame);
+            document.getElementById('resetBtn').addEventListener('click', resetGame);
+        }
+
+        // ============== CENTRAL HUB ==============
+        function createCentralHub() {
+            const hubGeo = new THREE.CylinderGeometry(1.6, 1.6, 0.12, 32);
+            const hubMat = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.18,
+                transmission: 0.88,
+                roughness: 0.03,
+                metalness: 0,
+                thickness: 0.6,
+            });
+            const hub = new THREE.Mesh(hubGeo, hubMat);
+            hub.position.y = 0.06;
+            scene.add(hub);
+
+            createText('東 1 局', 0, 0.14, 0, 0.6, 0xffd700);
+            createText('莊家：東', 0, 0.14, -0.8, 0.22, 0x888888);
+
+            const dirs = ['南', '西', '北', '東'];
+            const scores = [25000, 25000, 25000, 25000];
+            for (let i = 0; i < 4; i++) {
+                const angle = (i * Math.PI) / 2;
+                const x = Math.sin(angle) * 1.3;
+                const z = Math.cos(angle) * 1.3;
+                createText(scores[i].toLocaleString(), x, 0.14, z, 0.3, 0xffffff);
+                createText(dirs[i], x, 0.14, z + 0.3, 0.15, 0x666666);
+            }
+        }
+
+        function createText(text, x, y, z, size, color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#00000000';
+            ctx.fillRect(0, 0, 512, 128);
+            ctx.font = `900 ${size * 100}px "Noto Sans HK", sans-serif`;
+            ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 256, 64);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size * 3.8, size * 0.95), mat);
+            mesh.position.set(x, y, z);
+            mesh.rotation.x = -Math.PI / 2;
+            scene.add(mesh);
+            return mesh;
+        }
+
+        // ============== WALL (18x2) ==============
+        function createWall() {
+            wallTiles.forEach(w => scene.remove(w));
+            wallTiles = [];
+
+            const wallDist = 4.8;
+            const cols = 18;
+            const layerGap = TILE_D + 0.01;
+
+            for (let layer = 0; layer < 2; layer++) {
+                // Top
+                for (let i = 0; i < cols; i++) {
+                    const x = (i - cols/2 + 0.5) * TILE_W;
+                    const z = -wallDist - layer * layerGap;
+                    createWallTile(x, z);
+                }
+                // Bottom
+                for (let i = 0; i < cols; i++) {
+                    const x = (i - cols/2 + 0.5) * TILE_W;
+                    const z = wallDist + layer * layerGap;
+                    createWallTile(x, z);
+                }
+                // Left
+                for (let i = 0; i < 6; i++) {
+                    const x = -wallDist - layer * layerGap;
+                    const z = (i - 3) * TILE_H;
+                    createWallTile(x, z);
+                }
+                // Right
+                for (let i = 0; i < 6; i++) {
+                    const x = wallDist + layer * layerGap;
+                    const z = (i - 3) * TILE_H;
+                    createWallTile(x, z);
+                }
+            }
+        }
+
+        function createWallTile(x, z) {
+            const geo = new THREE.BoxGeometry(TILE_W, TILE_H, TILE_D);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x1a3a5c, roughness: 0.28, metalness: 0.08 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, TILE_H/2, z);
+            mesh.castShadow = true;
+            scene.add(mesh);
+            wallTiles.push(mesh);
+        }
+
+        // ============== TEXTURE (OPTIMIZED) ==============
+        function createTileTexture(suit, value) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 341;
+            const ctx = canvas.getContext('2d');
+
+            // Gradient background
+            const grad = ctx.createLinearGradient(0, 0, 256, 341);
+            grad.addColorStop(0, '#faf6ef');
+            grad.addColorStop(1, '#e8dfcf');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 256, 341);
+
+            // Border
+            ctx.strokeStyle = '#c9b896';
+            ctx.lineWidth = 9;
+            ctx.strokeRect(5, 5, 246, 331);
+
+            // Color - darker for better readability on blue
+            let color = SUITS[suit]?.c || '#1a1a1a';
+            if (['3','6','9'].includes(value) || ['中','發'].includes(value)) color = '#b01830';
+
+            // Corner number - smaller and darker
+            ctx.fillStyle = color;
+            ctx.font = 'bold 28px "Noto Sans HK"';
+            ctx.textAlign = 'left';
+            ctx.fillText(value, 15, 38);
+
+            // Center character - 10% smaller
+            ctx.font = 'bold 135px "Noto Sans HK"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            let suitChar = suit;
+            if (suit === '番子') suitChar = value;
+            if (suit === '字') suitChar = value;
+            ctx.fillText(suitChar, 128, 175);
+
+            // Shine
+            const shine = ctx.createLinearGradient(0, 0, 0, 80);
+            shine.addColorStop(0, 'rgba(255,255,255,0.22)');
+            shine.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = shine;
+            ctx.fillRect(6, 6, 244, 75);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // ============== CREATE TILE ==============
+        function createTile(suit, value, x, y, z, rotX = 0, rotY = 0, rotZ = 0, faceDown = false) {
+            const group = new THREE.Group();
+            group.position.set(x, y, z);
+            group.rotation.set(rotX, rotY, rotZ);
+
+            const geo = new THREE.BoxGeometry(TILE_W, TILE_H, TILE_D);
+            
+            const frontMat = faceDown 
+                ? new THREE.MeshStandardMaterial({ color: 0x1a3a5c, roughness: 0.28, metalness: 0.08 })
+                : new THREE.MeshStandardMaterial({ map: createTileTexture(suit, value), roughness: 0.32, metalness: 0.02 });
+            
+            const sideMat = new THREE.MeshStandardMaterial({ color: 0xf0ebe0, roughness: 0.42, metalness: 0.02 });
+            
+            const materials = [sideMat, sideMat, sideMat, sideMat, frontMat, new THREE.MeshStandardMaterial({ color: 0xf8f4eb, roughness: 0.32 })];
+
+            const mesh = new THREE.Mesh(geo, materials);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+
+            // Edge
+            const edges = new THREE.EdgesGeometry(geo);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.12, transparent: true }));
+            group.add(line);
+
+            scene.add(group);
+            return group;
+        }
+
+        // ============== DEMO ==============
+        function createDemoTiles() {
+            // Clear
+            tiles.forEach(t => scene.remove(t));
+            handTiles.forEach(t => scene.remove(t));
+            discardTiles.forEach(t => scene.remove(t));
+            tiles = []; handTiles = []; discardTiles = [];
+
+            const demoHands = [
+                ['萬','萬','萬','筒','筒','筒','索','索','索','1','2','3','4','番子'],
+                ['萬','萬','筒','筒','索','索','字','字','番子','番子','1','2','3','4'],
+                ['筒','筒','索','索','字','字','萬','萬','番子','番子','1','2','3','4'],
+                ['索','索','字','字','萬','萬','筒','筒','番子','番子','1','2','3','4'],
+            ];
+            const suitsAll = ['萬','萬','萬','筒','筒','筒','索','索','索','1','2','3','4'];
+
+            // Hands - tighter spacing
+            demoHands.forEach((hand, pIdx) => {
+                hand.forEach((suit, tIdx) => {
+                    const [pos, rot] = getHandPos(pIdx, tIdx);
+                    const faceUp = pIdx === 0;
+                    const tile = createTile(suit, suitsAll[tIdx % 10], pos[0], pos[1], pos[2], rot[0], rot[1], rot[2], !faceUp);
+                    handTiles.push(tile);
+                });
+            });
+
+            // Discards - 6x3 flat on table
+            for (let p = 0; p < 4; p++) {
+                for (let i = 0; i < 18; i++) {
+                    const [pos, rot] = getDiscardPos(p, i);
+                    const suit = ['萬','筒','索','字'][Math.floor(Math.random() * 4)];
+                    const val = String(Math.floor(Math.random() * 9) + 1);
+                    const tile = createTile(suit, val, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2], true);
+                    discardTiles.push(tile);
+                }
+            }
+
+            // Labels
+            const labels = ['GPT-4o', 'Claude', 'Gemini', 'Llama'];
+            const dirs = ['南', '西', '北', '東'];
+            const posList = [[0, 1, 4.2], [4.2, 1, 0], [0, 1, -4.2], [-4.2, 1, 0]];
+            posList.forEach((pos, i) => createText(labels[i] + ' ' + dirs[i], pos[0], pos[1], pos[2], 0.38, 0xffffff));
+        }
+
+        // ============== HAND POS (TIGHTER) ==============
+        function getHandPos(pIdx, tIdx) {
+            const dist = 3.8;
+            const spacing = TILE_W + TILE_GAP;
+            const offset = (tIdx - 6.5) * spacing;
+            const tilt = -0.26;
+            
+            switch(pIdx) {
+                case 0: return [[offset, TILE_H/2 + 0.001, dist], [tilt, 0, 0]];
+                case 1: return [[-dist, TILE_H/2 + 0.001, offset], [tilt, Math.PI/2, 0]];
+                case 2: return [[-offset, TILE_H/2 + 0.001, -dist], [tilt, Math.PI, 0]];
+                case 3: return [[dist, TILE_H/2 + 0.001, -offset], [tilt, -Math.PI/2, 0]];
+            }
+        }
+
+        // ============== DISCARD POS (FLAT ON TABLE - LIE FLAT) ==============
+        function getDiscardPos(pIdx, tIdx) {
+            const row = Math.floor(tIdx / 6);
+            const col = tIdx % 6;
+            
+            const dist = 1.8;
+            const gap = DISCARD_GAP;
+            const sx = TILE_W + gap;
+            const sz = TILE_D + gap;  // Use TILE_D for spacing when lying flat
+            
+            // For flat tiles, Y should be TILE_D/2 (the thin edge touches table)
+            const y = TILE_D/2 + 0.002;
+            
+            switch(pIdx) {
+                case 0: // South - flat, horizontal
+                    // Rotate 90° on X to lie flat
+                    return [[(col - 2.5) * sx, y, dist + row * sz], [-Math.PI/2, 0, 0]];
+                case 1: // West - flat, rotated 90°
+                    return [[-dist - row * sz, y, (col - 2.5) * sx], [-Math.PI/2, Math.PI/2, 0]];
+                case 2: // North - flat, rotated 180°
+                    return [[-(col - 2.5) * sx, y, -dist - row * sz], [-Math.PI/2, Math.PI, 0]];
+                case 3: // East - flat, rotated -90°
+                    return [[dist + row * sz, y, -(col - 2.5) * sx], [-Math.PI/2, -Math.PI/2, 0]];
+            }
+        }
+
+        // ============== GAME ==============
+        function startGame() {
+            document.getElementById('info').textContent = '🀄 AI Mahjong Arena | Phase: Playing';
+        }
+
+        function resetGame() {
+            createWall();
+            createDemoTiles();
+            document.getElementById('info').textContent = '🀄 AI Mahjong Arena | Phase: Ready';
+        }
+
+        // ============== LOOP ==============
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        init();
+    </script>
+</body>
+</html>

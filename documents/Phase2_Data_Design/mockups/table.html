@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🀄 AI Arena - 麻雀檯</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* ========================
+           HK Mahjong Style - Table View
+           深藍布紋 + 象牙白牌面 + 毛玻璃
+           ======================== */
+        
+        :root {
+            --bg-felt: #0d1b2a;
+            --card-back: #1a3a5c;
+            --card-face: #f8f4eb;
+            --accent-gold: #ffd700;
+            --accent-cyan: #00d4ff;
+            --glass-bg: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --text-primary: #f8f4eb;
+            --text-secondary: rgba(248, 244, 235, 0.7);
+            --tile-width: 50px;
+            --tile-height: 66px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans HK', sans-serif;
+            background: var(--bg-felt);
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        /* 深藍色布紋背景 */
+        .felt-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 50% 50%, rgba(26, 58, 92, 0.5) 0%, transparent 60%),
+                radial-gradient(ellipse at 30% 20%, rgba(0, 212, 255, 0.1) 0%, transparent 40%),
+                radial-gradient(ellipse at 70% 80%, rgba(255, 215, 0, 0.08) 0%, transparent 40%),
+                linear-gradient(180deg, #0d1b2a 0%, #152a42 50%, #0d1b2a 100%);
+            z-index: -1;
+        }
+
+        /* 布紋質感 */
+        .felt-bg::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E");
+            opacity: 0.4;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(180deg, rgba(13, 27, 42, 0.95) 0%, rgba(13, 27, 42, 0.8) 100%);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 100;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .game-info {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .info-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent-gold);
+        }
+
+        .game-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: 'Noto Sans HK', sans-serif;
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            color: var(--text-primary);
+        }
+
+        .btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, #b8860b 0%, var(--accent-gold) 100%);
+            border: none;
+            color: #0d1b2a;
+        }
+
+        /* Mahjong Table Container */
+        .table-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 1200px;
+        }
+
+        /* 3D Table */
+        .mahjong-table {
+            width: 900px;
+            height: 700px;
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(55deg);
+        }
+
+        /* Table Surface */
+        .table-surface {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 50% 50%, rgba(26, 58, 92, 0.8) 0%, rgba(13, 27, 42, 0.95) 100%);
+            border-radius: 20px;
+            border: 3px solid var(--card-back);
+            box-shadow: 
+                0 30px 60px rgba(0, 0, 0, 0.5),
+                inset 0 2px 10px rgba(255, 255, 255, 0.05);
+        }
+
+        /* Central Hub - Frosted Glass */
+        .central-hub {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 160px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .hub-round {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .hub-round-num {
+            font-size: 36px;
+            font-weight: 900;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .hub-wind {
+            font-size: 24px;
+            margin-top: 10px;
+        }
+
+        /* Player Positions */
+        .player-position {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Bottom Player (User) */
+        .player-bottom {
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        /* Top Player */
+        .player-top {
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%) rotate(180deg);
+        }
+
+        /* Left Player */
+        .player-left {
+            left: 30px;
+            top: 50%;
+            transform: translateY(-50%) rotate(90deg);
+        }
+
+        /* Right Player */
+        .player-right {
+            right: 30px;
+            top: 50%;
+            transform: translateY(-50%) rotate(-90deg);
+        }
+
+        /* Player Info */
+        .player-info {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 8px 15px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .player-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--card-back), #2a5a8c);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .player-name {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .player-score {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent-gold);
+        }
+
+        .player-wind {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+
+        /* Hand Tiles */
+        .hand-tiles {
+            display: flex;
+            gap: 2px;
+        }
+
+        .hand-tiles .mahjong-tile {
+            transform: translateY(0);
+        }
+
+        /* Discarded Tiles (The River) */
+        .discard-area {
+            position: absolute;
+            display: grid;
+            gap: 3px;
+        }
+
+        .discard-area-6x3 {
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+        }
+
+        .discard-bottom {
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 320px;
+            height: 100px;
+        }
+
+        .discard-top {
+            top: 120px;
+            left: 50%;
+            transform: translateX(-50%) rotate(180deg);
+            width: 320px;
+            height: 100px;
+        }
+
+        .discard-left {
+            left: 120px;
+            top: 50%;
+            transform: translateY(-50%) rotate(90deg);
+            width: 320px;
+            height: 100px;
+        }
+
+        .discard-right {
+            right: 120px;
+            top: 50%;
+            transform: translateY(-50%) rotate(-90deg);
+            width: 320px;
+            height: 100px;
+        }
+
+        /* Mahjong Tile */
+        .mahjong-tile {
+            width: var(--tile-width);
+            height: var(--tile-height);
+            background: var(--card-face);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 34px;
+            color: #0d1b2a;
+            box-shadow: 
+                2px 2px 0 #d4cfc5,
+                3px 3px 0 #c0bbb0,
+                4px 4px 6px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+
+        .mahjong-tile:hover {
+            transform: translateY(-8px);
+        }
+
+        .mahjong-tile.selected {
+            transform: translateY(-15px);
+            box-shadow: 
+                0 15px 0 var(--accent-cyan),
+                0 20px 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .mahjong-tile.red { color: #c41e3a; }
+        .mahjong-tile.green { color: #228b22; }
+        .mahjong-tile.blue { color: #1a3a5c; }
+
+        .mahjong-tile.back {
+            background: linear-gradient(135deg, var(--card-back) 0%, #2a5a8c 100%);
+            border: 2px solid #3a7acc;
+        }
+
+        .mahjong-tile.back::after {
+            content: '';
+            width: 30px;
+            height: 40px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        /* Wall Tiles */
+        .wall {
+            position: absolute;
+            display: flex;
+            gap: 1px;
+        }
+
+        .wall-left, .wall-right {
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .wall-top {
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .wall-bottom {
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .wall-left {
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .wall-right {
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        /* Action Buttons Panel */
+        .action-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 15px 25px;
+            z-index: 100;
+        }
+
+        .action-btn {
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: 'Noto Sans HK', sans-serif;
+            border: none;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .action-btn.pass {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+            border: 1px solid var(--glass-border);
+        }
+
+        .action-btn.pon {
+            background: linear-gradient(135deg, #2a5a8c, #3a7acc);
+            color: white;
+        }
+
+        .action-btn.chow {
+            background: linear-gradient(135deg, #1a5a3c, #2a8a5c);
+            color: white;
+        }
+
+        .action-btn.ron {
+            background: linear-gradient(135deg, #b8860b, var(--accent-gold));
+            color: #0d1b2a;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+        }
+
+        .action-btn.tsumo {
+            background: linear-gradient(135deg, #8b0000, #c41e3a);
+            color: white;
+        }
+
+        /* Thought Stream Panel */
+        .thought-panel {
+            position: fixed;
+            right: 20px;
+            top: 80px;
+            width: 280px;
+            max-height: calc(100vh - 200px);
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            overflow: hidden;
+            z-index: 90;
+        }
+
+        .thought-header {
+            padding: 15px;
+            background: linear-gradient(135deg, var(--card-back), #2a5a8c);
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .thought-content {
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .thought-message {
+            padding: 10px;
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        .thought-message:last-child {
+            margin-bottom: 0;
+        }
+
+        .thought-message.active {
+            background: rgba(0, 212, 255, 0.1);
+            border-left: 3px solid var(--accent-cyan);
+        }
+
+        /* AI Analyst Panel */
+        .analyst-panel {
+            position: fixed;
+            left: 20px;
+            top: 80px;
+            width: 260px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            z-index: 90;
+        }
+
+        .analyst-header {
+            padding: 15px;
+            background: linear-gradient(135deg, #b8860b, var(--accent-gold));
+            color: #0d1b2a;
+            font-weight: 700;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .analyst-content {
+            padding: 15px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--glass-border);
+            font-size: 13px;
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        /* Score Popup */
+        .score-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            background: linear-gradient(135deg, #b8860b, var(--accent-gold));
+            padding: 40px 60px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 200;
+            box-shadow: 0 20px 60px rgba(255, 215, 0, 0.5);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .score-popup.show {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+        }
+
+        .score-popup h2 {
+            font-size: 28px;
+            color: #0d1b2a;
+            margin-bottom: 10px;
+        }
+
+        .score-popup .points {
+            font-size: 48px;
+            font-weight: 900;
+            color: #0d1b2a;
+        }
+
+        .score-popup .han {
+            font-size: 20px;
+            color: #8b0000;
+            margin-top: 10px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .mahjong-table {
+                transform: rotateX(50deg) scale(0.7);
+            }
+            
+            .thought-panel, .analyst-panel {
+                display: none;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-cyan);
+        }
+    </style>
+</head>
+<body>
+    <div class="felt-bg"></div>
+    
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="game-info">
+            <div class="info-item">
+                <span class="info-label">局數</span>
+                <span class="info-value">第 3 局</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">東</span>
+                <span class="info-value">2 本場</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">剩余</span>
+                <span class="info-value">12 隻</span>
+            </div>
+        </div>
+        <div class="game-controls">
+            <button class="btn">🏠 大廳</button>
+            <button class="btn">⚙️ 設定</button>
+            <button class="btn btn-gold">認真模式</button>
+        </div>
+    </div>
+
+    <!-- Mahjong Table -->
+    <div class="table-container">
+        <div class="mahjong-table">
+            <!-- Table Surface -->
+            <div class="table-surface"></div>
+            
+            <!-- Central Hub -->
+            <div class="central-hub">
+                <span class="hub-round">東南西北</span>
+                <span class="hub-round-num">東 2</span>
+                <span class="hub-wind">🔴</span>
+            </div>
+
+            <!-- Top Player -->
+            <div class="player-position player-top">
+                <div class="player-info">
+                    <div class="player-avatar">🤖</div>
+                    <span class="player-name">Claude Defense</span>
+                    <span class="player-wind">南</span>
+                    <span class="player-score">-32000</span>
+                </div>
+                <div class="hand-tiles">
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                </div>
+            </div>
+
+            <!-- Bottom Player (You) -->
+            <div class="player-position player-bottom">
+                <div class="hand-tiles">
+                    <div class="mahjong-tile">一</div>
+                    <div class="mahjong-tile">三</div>
+                    <div class="mahjong-tile">五</div>
+                    <div class="mahjong-tile">🀐</div>
+                    <div class="mahjong-tile green">🀓</div>
+                    <div class="mahjong-tile green">🀔</div>
+                    <div class="mahjong-tile blue">🀙</div>
+                    <div class="mahjong-tile blue">🀚</div>
+                    <div class="mahjong-tile">東</div>
+                    <div class="mahjong-tile">南</div>
+                    <div class="mahjong-tile red">中</div>
+                    <div class="mahjong-tile green">發</div>
+                    <div class="mahjong-tile">🀫</div>
+                    <div class="mahjong-tile selected">🀫</div>
+                </div>
+                <div class="player-info">
+                    <div class="player-avatar">👤</div>
+                    <span class="player-name">你</span>
+                    <span class="player-wind">東</span>
+                    <span class="player-score">+156000</span>
+                </div>
+            </div>
+
+            <!-- Left Player -->
+            <div class="player-position player-left">
+                <div class="player-info">
+                    <div class="player-avatar">🤖</div>
+                    <span class="player-name">GPT Attack</span>
+                    <span class="player-wind">西</span>
+                    <span class="player-score">+8500</span>
+                </div>
+                <div class="hand-tiles">
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                </div>
+            </div>
+
+            <!-- Right Player -->
+            <div class="player-position player-right">
+                <div class="player-info">
+                    <div class="player-avatar">🤖</div>
+                    <span class="player-name">DeepSeek Pro</span>
+                    <span class="player-wind">北</span>
+                    <span class="player-score">-36500</span>
+                </div>
+                <div class="hand-tiles">
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                    <div class="mahjong-tile back"></div>
+                </div>
+            </div>
+
+            <!-- Discard Areas -->
+            <div class="discard-area discard-bottom">
+                <div class="mahjong-tile">🀙</div>
+                <div class="mahjong-tile">🀚</div>
+                <div class="mahjong-tile">🀛</div>
+                <div class="mahjong-tile red">中</div>
+                <div class="mahjong-tile green">發</div>
+                <div class="mahjong-tile">北</div>
+            </div>
+
+            <div class="discard-area discard-top">
+                <div class="mahjong-tile">🀐</div>
+                <div class="mahjong-tile green">🀓</div>
+                <div class="mahjong-tile green">🀔</div>
+                <div class="mahjong-tile">一</div>
+                <div class="mahjong-tile">二</div>
+                <div class="mahjong-tile">三</div>
+            </div>
+
+            <!-- Wall (simplified) -->
+            <div class="wall wall-top">
+                <div class="mahjong-tile back"></div>
+                <div class="mahjong-tile back"></div>
+                <div class="mahjong-tile back"></div>
+                <div class="mahjong-tile back"></div>
+                <div class="mahjong-tile back"></div>
+                <div class="mahjong-tile back"></div>
+            </div>
+
+            <div class="wall wall-bottom">
+                <div class="mahjong-tile back"></div>
+                <div class="mahjong-tile back"></div>
+                <div class="mahjong-tile back"></div>
+                <div class="mahjong-tile back"></div>
+                <div class="mahjong-tile back"></div>
+                <div class="mahjong-tile back"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Panel -->
+    <div class="action-panel">
+        <button class="action-btn pass">過</button>
+        <button class="action-btn pon">碰</button>
+        <button class="action-btn chow">食</button>
+        <button class="action-btn tsumo">槓</button>
+        <button class="action-btn ron">食糊</button>
+    </div>
+
+    <!-- Thought Stream Panel -->
+    <div class="thought-panel">
+        <div class="thought-header">
+            🧠 Thought Stream
+        </div>
+        <div class="thought-content">
+            <div class="thought-message">
+                <strong>Claude Defense:</strong> 計算緊 defend against GPT既 ready hand...
+            </div>
+            <div class="thought-message active">
+                <strong>你:</strong> 聽牌！七對子 + 五門莊，有 8 張 repeated tiles
+            </div>
+            <div class="thought-message">
+                <strong>DeepSeek Pro:</strong> 考慮緊是否要做大對子...
+            </div>
+            <div class="thought-message">
+                <strong>GPT Attack:</strong> 準備食糊！等待 🀫 最後一隻
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Analyst Panel -->
+    <div class="analyst-panel">
+        <div class="analyst-header">
+            📊 AI Analyst
+        </div>
+        <div class="analyst-content">
+            <div class="stat-item">
+                <span class="stat-label">目前手牌</span>
+                <span class="stat-value">聽牌 (Tenpai)</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">和了率</span>
+                <span class="stat-value">73.5%</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">最佳打牌</span>
+                <span class="stat-value">🀐 (5索)</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">預測東家</span>
+                <span class="stat-value">好快自摸</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">危險張</span>
+                <span class="stat-value">🀫 (北)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Score Popup (Demo) -->
+    <div class="score-popup">
+        <h2>🎉 食糊！</h2>
+        <div class="points">+16000</div>
+        <div class="han">滿貫 (Haneman)</div>
+    </div>
+
+    <script>
+        // Demo: Show score popup after 3 seconds
+        setTimeout(() => {
+            document.querySelector('.score-popup').classList.add('show');
+        }, 3000);
+
+        // Close popup on click
+        document.querySelector('.score-popup').addEventListener('click', () => {
+            document.querySelector('.score-popup').classList.remove('show');
+        });
+    </script>
+</body>
+</html>

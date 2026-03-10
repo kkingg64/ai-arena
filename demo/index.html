@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Arena - 首頁</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-dark: #0d1b2a;
+            --secondary-dark: #1b2838;
+            --card-bg: #162635;
+            --ivory: #f8f4eb;
+            --gold: #ffd700;
+            --gold-dim: #c9a600;
+            --cyan: #00d4ff;
+            --cyan-dim: #00a8cc;
+            --text-light: #e8e8e8;
+            --text-muted: #8899a6;
+            --danger: #ff4757;
+            --success: #2ed573;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans HK', sans-serif;
+            background: var(--primary-dark);
+            color: var(--text-light);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Background Pattern */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(0, 212, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 215, 0, 0.03) 0%, transparent 40%),
+                radial-gradient(circle at 50% 80%, rgba(0, 212, 255, 0.03) 0%, transparent 40%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(13, 27, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 72px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dim) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .logo-text {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--ivory);
+        }
+
+        .logo-text span {
+            color: var(--cyan);
+        }
+
+        .nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: var(--ivory);
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .nav-link.active {
+            color: var(--cyan);
+        }
+
+        .nav-cta {
+            background: linear-gradient(135deg, var(--cyan) 0%, var(--cyan-dim) 100%);
+            color: var(--primary-dark);
+            padding: 10px 24px;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            margin-left: 16px;
+        }
+
+        .nav-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 212, 255, 0.4);
+        }
+
+        /* Main */
+        .main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 60px 0;
+            position: relative;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 215, 0, 0.1);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 14px;
+            color: var(--gold);
+            margin-bottom: 24px;
+        }
+
+        .hero-title {
+            font-size: 56px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, var(--ivory) 0%, var(--cyan) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+        }
+
+        .hero-title span {
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dim) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 20px;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto 40px;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 32px;
+            border-radius: var(--radius);
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dim) 100%);
+            color: var(--primary-dark);
+            box-shadow: 0 4px 20px rgba(255, 215, 0, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(255, 215, 0, 0.5);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid var(--cyan);
+            color: var(--cyan);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(0, 212, 255, 0.1);
+            transform: translateY(-3px);
+        }
+
+        /* Section */
+        .section {
+            margin-bottom: 60px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--ivory);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 28px;
+            background: linear-gradient(180deg, var(--cyan) 0%, var(--gold) 100%);
+            border-radius: 2px;
+        }
+
+        .section-link {
+            color: var(--cyan);
+            text-decoration: none;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .section-link:hover {
+            color: var(--gold);
+        }
+
+        /* Featured Matches */
+        .matches-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+        }
+
+        .match-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 24px;
+            border: 1px solid rgba(0, 212, 255, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .match-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--cyan) 0%, var(--gold) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .match-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow);
+            border-color: rgba(0, 212, 255, 0.3);
+        }
+
+        .match-card:hover::before {
+            opacity: 1;
+        }
+
+        .match-card-link {
+            text-decoration: none;
+            display: block;
+        }
+
+        .match-card-link .match-card {
+            height: 100%;
+        }
+
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .match-status {
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-live {
+            background: rgba(255, 71, 87, 0.2);
+            color: var(--danger);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .status-completed {
+            background: rgba(46, 213, 115, 0.2);
+            color: var(--success);
+        }
+
+        .match-type {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .match-players {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .player {
+            text-align: center;
+            flex: 1;
+        }
+
+        .player-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: var(--secondary-dark);
+            margin: 0 auto 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            border: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .match-card:hover .player-avatar {
+            border-color: var(--cyan);
+        }
+
+        .player-name {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--ivory);
+        }
+
+        .player-rank {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .match-vs {
+            padding: 0 16px;
+            font-weight: 700;
+            color: var(--gold);
+            font-size: 20px;
+        }
+
+        .match-score {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            padding: 16px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .score-item {
+            text-align: center;
+        }
+
+        .score-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--ivory);
+        }
+
+        .score-label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .match-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .match-viewers {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .match-action {
+            color: var(--cyan);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        /* Leaderboard Preview */
+        .leaderboard-preview {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 24px;
+            border: 1px solid rgba(0, 212, 255, 0.1);
+        }
+
+        .leaderboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .leaderboard-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--ivory);
+        }
+
+        .leaderboard-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-sm);
+            transition: all 0.3s ease;
+        }
+
+        .leaderboard-item:hover {
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        .leaderboard-rank {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .rank-1 {
+            background: linear-gradient(135deg, #ffd700 0%, #ffaa00 100%);
+            color: var(--primary-dark);
+        }
+
+        .rank-2 {
+            background: linear-gradient(135deg, #c0c0c0 0%, #a0a0a0 100%);
+            color: var(--primary-dark);
+        }
+
+        .rank-3 {
+            background: linear-gradient(135deg, #cd7f32 0%, #a0522d 100%);
+            color: var(--primary-dark);
+        }
+
+        .rank-other {
+            background: var(--secondary-dark);
+            color: var(--text-muted);
+        }
+
+        .leaderboard-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--secondary-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .leaderboard-info {
+            flex: 1;
+        }
+
+        .leaderboard-name {
+            font-weight: 600;
+            color: var(--ivory);
+            font-size: 15px;
+        }
+
+        .leaderboard-stats {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .leaderboard-score {
+            text-align: right;
+        }
+
+        .leaderboard-points {
+            font-weight: 700;
+            color: var(--gold);
+            font-size: 18px;
+        }
+
+        .leaderboard-winrate {
+            font-size: 12px;
+            color: var(--success);
+        }
+
+        /* Trending */
+        .trending-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        .trending-card {
+            background: var(--card-bg);
+            border-radius: var(--radius-sm);
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(0, 212, 255, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .trending-card:hover {
+            border-color: var(--cyan);
+            transform: translateY(-4px);
+        }
+
+        .trending-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+        }
+
+        .trending-name {
+            font-weight: 600;
+            color: var(--ivory);
+            margin-bottom: 4px;
+        }
+
+        .trending-stats {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .trending-stats span {
+            color: var(--cyan);
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--secondary-dark);
+            border-top: 1px solid rgba(0, 212, 255, 0.1);
+            padding: 60px 24px 30px;
+            margin-top: 60px;
+        }
+
+        .footer-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .footer-brand {
+            max-width: 300px;
+        }
+
+        .footer-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .footer-desc {
+            color: var(--text-muted);
+            font-size: 14px;
+            line-height: 1.8;
+        }
+
+        .footer-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--ivory);
+            margin-bottom: 20px;
+        }
+
+        .footer-links {
+            list-style: none;
+        }
+
+        .footer-links li {
+            margin-bottom: 12px;
+        }
+
+        .footer-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--cyan);
+        }
+
+        .footer-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .footer-copyright {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .footer-social {
+            display: flex;
+            gap: 16px;
+        }
+
+        .footer-social a {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .footer-social a:hover {
+            background: var(--cyan);
+            color: var(--primary-dark);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .trending-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .footer-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 36px;
+            }
+            
+            .nav-menu {
+                display: none;
+            }
+            
+            .matches-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .trending-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .footer-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .footer-bottom {
+                flex-direction: column;
+                gap: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav-container">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">🏆</div>
+                <div class="logo-text">AI <span>Arena</span></div>
+            </a>
+            <div class="nav-menu">
+                <a href="index.html" class="nav-link active">首頁</a>
+                <a href="leaderboard.html" class="nav-link">排行榜</a>
+                <a href="replay.html" class="nav-link">對局回顧</a>
+                <a href="game.html" class="nav-cta">開始對戰</a>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main -->
+    <main class="main">
+        <!-- Hero -->
+        <section class="hero">
+            <div class="hero-badge">
+                <span>⚡</span>
+                立即體驗 AI 麻將對戰
+            </div>
+            <h1 class="hero-title">
+                最強 AI 麻將<br><span>競技場</span>
+            </h1>
+            <p class="hero-subtitle">
+                與全球頂尖 AI 對手較量，展示你的麻將實力，贏取豐富獎品！
+            </p>
+            <div class="hero-actions">
+                <a href="game.html" class="btn btn-primary">
+                    <span>🎮</span> 開始對戰
+                </a>
+                <a href="leaderboard.html" class="btn btn-secondary">
+                    <span>📊</span> 查看排行榜
+                </a>
+            </div>
+        </section>
+
+        <!-- Featured Matches -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">精彩對局</h2>
+                <a href="#" class="section-link">查看更多 →</a>
+            </div>
+            <div class="matches-grid">
+                <a href="game.html?game_id=game_001" class="match-card-link">
+                <!-- Match 1 -->
+                <div class="match-card">
+                    <div class="match-header">
+                        <span class="match-type">🐔 標準打法</span>
+                        <span class="match-status status-live">🔴 直播中</span>
+                    </div>
+                    <div class="match-players">
+                        <div class="player">
+                            <div class="player-avatar">🤖</div>
+                            <div class="player-name">AlphaMahjong</div>
+                            <div class="player-rank">Rank #3</div>
+                        </div>
+                        <div class="match-vs">VS</div>
+                        <div class="player">
+                            <div class="player-avatar">🐲</div>
+                            <div class="player-name">DragonAI</div>
+                            <div class="player-rank">Rank #5</div>
+                        </div>
+                    </div>
+                    <div class="match-score">
+                        <div class="score-item">
+                            <div class="score-value">2</div>
+                            <div class="score-label">上半場</div>
+                        </div>
+                        <div class="score-item">
+                            <div class="score-value">-</div>
+                            <div class="score-label">下半場</div>
+                        </div>
+                    </div>
+                    <div class="match-footer">
+                        <div class="match-viewers">
+                            👁️ 1,234 人觀看
+                        </div>
+                        <span class="match-action">觀看直播 →</span>
+                    </div>
+                </div>
+                </a>
+
+                <!-- Match 2 -->
+                <a href="game.html?game_id=game_002" class="match-card-link">
+                <div class="match-card">
+                    <div class="match-header">
+                        <span class="match-type">🐔 標準打法</span>
+                        <span class="match-status status-completed">✅ 已結束</span>
+                    </div>
+                    <div class="match-players">
+                        <div class="player">
+                            <div class="player-avatar">🦊</div>
+                            <div class="player-name">FoxMahjong</div>
+                            <div class="player-rank">Rank #8</div>
+                        </div>
+                        <div class="match-vs">VS</div>
+                        <div class="player">
+                            <div class="player-avatar">🦁</div>
+                            <div class="player-name">LionAI</div>
+                            <div class="player-rank">Rank #12</div>
+                        </div>
+                    </div>
+                    <div class="match-score">
+                        <div class="score-item">
+                            <div class="score-value">3</div>
+                            <div class="score-label">上半場</div>
+                        </div>
+                        <div class="score-item">
+                            <div class="score-value">1</div>
+                            <div class="score-label">下半場</div>
+                        </div>
+                    </div>
+                    <div class="match-footer">
+                        <div class="match-viewers">
+                            👁️ 5,678 人觀看
+                        </div>
+                        <span class="match-action">觀看回顧 →</span>
+                    </div>
+                </div>
+                </a>
+
+                <!-- Match 3 -->
+                <a href="game.html?game_id=game_003" class="match-card-link">
+                <div class="match-card">
+                    <div class="match-header">
+                        <span class="match-type">🎯 快速對決</span>
+                        <span class="match-status status-completed">✅ 已結束</span>
+                    </div>
+                    <div class="match-players">
+                        <div class="player">
+                            <div class="player-avatar">🐼</div>
+                            <div class="player-name">PandaAI</div>
+                            <div class="player-rank">Rank #15</div>
+                        </div>
+                        <div class="match-vs">VS</div>
+                        <div class="player">
+                            <div class="player-avatar">🦅</div>
+                            <div class="player-name">EagleMind</div>
+                            <div class="player-rank">Rank #2</div>
+                        </div>
+                    </div>
+                    <div class="match-score">
+                        <div class="score-item">
+                            <div class="score-value">2</div>
+                            <div class="score-label">上半場</div>
+                        </div>
+                        <div class="score-item">
+                            <div class="score-value">2</div>
+                            <div class="score-label">下半場</div>
+                        </div>
+                    </div>
+                    <div class="match-footer">
+                        <div class="match-viewers">
+                            👁️ 3,456 人觀看
+                        </div>
+                        <span class="match-action">觀看回顧 →</span>
+                    </div>
+                </div>
+                </a>
+            </div>
+        </section>
+
+        <!-- Leaderboard Top 10 -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">排行榜 Top 10</h2>
+                <a href="leaderboard.html" class="section-link">查看完整榜單 →</a>
+            </div>
+            <div class="leaderboard-preview">
+                <div class="leaderboard-header">
+                    <span class="leaderboard-title">🏆 本週排名</span>
+                </div>
+                <div class="leaderboard-list">
+                    <div class="leaderboard-item">
+                        <div class="leaderboard-rank rank-1">1</div>
+                        <div class="leaderboard-avatar">👑</div>
+                        <div class="leaderboard-info">
+                            <div class="leaderboard-name">AlphaMaster</div>
+                            <div class="leaderboard-stats">42 場對戰 · 78% 勝率</div>
+                        </div>
+                        <div class="leaderboard-score">
+                            <div class="leaderboard-points">9,850</div>
+                            <div class="leaderboard-winrate">+320</div>
+                        </div>
+                    </div>
+                    <div class="leaderboard-item">
+                        <div class="leaderboard-rank rank-2">2</div>
+                        <div class="leaderboard-avatar">🥈</div>
+                        <div class="leaderboard-info">
+                            <div class="leaderboard-name">DragonSage</div>
+                            <div class="leaderboard-stats">38 場對戰 · 72% 勝率</div>
+                        </div>
+                        <div class="leaderboard-score">
+                            <div class="leaderboard-points">9,420</div>
+                            <div class="leaderboard-winrate">+280</div>
+                        </div>
+                    </div>
+                    <div class="leaderboard-item">
+                        <div class="leaderboard-rank rank-3">3</div>
+                        <div class="leaderboard-avatar">🥉</div>
+                        <div class="leaderboard-info">
+                            <div class="leaderboard-name">PhoenixAI</div>
+                            <div class="leaderboard-stats">35 場對戰 · 69% 勝率</div>
+                        </div>
+                        <div class="leaderboard-score">
+                            <div class="leaderboard-points">8,950</div>
+                            <div class="leaderboard-winrate">+210</div>
+                        </div>
+                    </div>
+                    <div class="leaderboard-item">
+                        <div class="leaderboard-rank rank-other">4</div>
+                        <div class="leaderboard-avatar">🐲</div>
+                        <div class="leaderboard-info">
+                            <div class="leaderboard-name">TigerKing</div>
+                            <div class="leaderboard-stats">40 場對戰 · 65% 勝率</div>
+                        </div>
+                        <div class="leaderboard-score">
+                            <div class="leaderboard-points">8,320</div>
+                            <div class="leaderboard-winrate">+150</div>
+                        </div>
+                    </div>
+                    <div class="leaderboard-item">
+                        <div class="leaderboard-rank rank-other">5</div>
+                        <div class="leaderboard-avatar">🦊</div>
+                        <div class="leaderboard-info">
+                            <div class="leaderboard-name">FoxStrategy</div>
+                            <div class="leaderboard-stats">36 場對戰 · 67% 勝率</div>
+                        </div>
+                        <div class="leaderboard-score">
+                            <div class="leaderboard-points">7,890</div>
+                            <div class="leaderboard-winrate">+120</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trending -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">熱門對局</h2>
+            </div>
+            <div class="trending-grid">
+                <div class="trending-card">
+                    <div class="trending-icon">🔥</div>
+                    <div class="trending-name">巔峰對決</div>
+                    <div class="trending-stats"><span>2,345</span> 場今日</div>
+                </div>
+                <div class="trending-card">
+                    <div class="trending-icon">⚡</div>
+                    <div class="trending-name">快速對決</div>
+                    <div class="trending-stats"><span>1,892</span> 場今日</div>
+                </div>
+                <div class="trending-card">
+                    <div class="trending-icon">🎯</div>
+                    <div class="trending-name">挑戰賽</div>
+                    <div class="trending-stats"><span>987</span> 場今日</div>
+                </div>
+                <div class="trending-card">
+                    <div class="trending-icon">🏆</div>
+                    <div class="trending-name">錦標賽</div>
+                    <div class="trending-stats"><span>234</span> 場今日</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <div class="footer-logo">
+                        <div class="logo-icon">🏆</div>
+                        <div class="logo-text">AI <span>Arena</span></div>
+                    </div>
+                    <p class="footer-desc">
+                        全球首個 AI 麻將競技平台，匯聚頂尖人工智能演算法，帶來前所未有的麻將對戰體驗。
+                    </p>
+                </div>
+                <div>
+                    <h4 class="footer-title">快速連結</h4>
+                    <ul class="footer-links">
+                        <li><a href="index.html">首頁</a></li>
+                        <li><a href="leaderboard.html">排行榜</a></li>
+                        <li><a href="replay.html">對局回顧</a></li>
+                        <li><a href="#">比賽規則</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="footer-title">資源</h4>
+                    <ul class="footer-links">
+                        <li><a href="#">API 文檔</a></li>
+                        <li><a href="#">開發者中心</a></li>
+                        <li><a href="#">常見問題</a></li>
+                        <li><a href="#">聯絡我們</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="footer-title">法律</h4>
+                    <ul class="footer-links">
+                        <li><a href="#">服務條款</a></li>
+                        <li><a href="#">隱私政策</a></li>
+                        <li><a href="#">Cookie 政策</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <div class="footer-copyright">
+                    © 2026 AI Arena. All rights reserved.
+                </div>
+                <div class="footer-social">
+                    <a href="#">🐦</a>
+                    <a href="#">📱</a>
+                    <a href="#">💬</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+    
+    <script>
+        // API Base URL - 假設後端運行在 8080 端口
+        const API_BASE = window.location.origin + '/api';
+        
+        // 延遲加載避免 CORS 問題
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadFeaturedMatches();
+            await loadLeaderboardTop10();
+        });
+        
+        // 加載精彩對局 (Featured Matches)
+        async function loadFeaturedMatches() {
+            const container = document.querySelector('.matches-grid');
+            if (!container) return;
+            
+            try {
+                const response = await fetch(API_BASE + '/games?limit=6');
+                const data = await response.json();
+                
+                if (!data.games || data.games.length === 0) {
+                    // 使用默認mock數據
+                    renderDefaultMatches(container);
+                    return;
+                }
+                
+                container.innerHTML = data.games.map((game, index) => {
+                    const player1 = game.players[0] || 'Player 1';
+                    const player2 = game.players[1] || 'Player 2';
+                    const statusClass = game.status === 'playing' ? 'status-live' : 'status-completed';
+                    const statusText = game.status === 'playing' ? '🔴 直播中' : '✅ 已結束';
+                    const viewers = Math.floor(Math.random() * 5000) + 1000;
+                    
+                    return `
+                        <div class="match-card">
+                            <div class="match-header">
+                                <span class="match-type">🐔 標準打法</span>
+                                <span class="match-status ${statusClass}">${statusText}</span>
+                            </div>
+                            <div class="match-players">
+                                <div class="player">
+                                    <div class="player-avatar">🤖</div>
+                                    <div class="player-name">${player1}</div>
+                                    <div class="player-rank">Rank #${index + 1}</div>
+                                </div>
+                                <div class="match-vs">VS</div>
+                                <div class="player">
+                                    <div class="player-avatar">🐲</div>
+                                    <div class="player-name">${player2}</div>
+                                    <div class="player-rank">Rank #${index + 3}</div>
+                                </div>
+                            </div>
+                            <div class="match-score">
+                                <div class="score-item">
+                                    <div class="score-value">${game.winner ? Math.floor(Math.random() * 5) : '-'}</div>
+                                    <div class="score-label">上半場</div>
+                                </div>
+                                <div class="score-item">
+                                    <div class="score-value">${game.winner ? Math.floor(Math.random() * 3) : '-'}</div>
+                                    <div class="score-label">下半場</div>
+                                </div>
+                            </div>
+                            <div class="match-footer">
+                                <div class="match-viewers">👁️ ${viewers.toLocaleString()} 人觀看</div>
+                                <a href="replay.html?game_id=${game.game_id}" class="match-action">${game.status === 'playing' ? '觀看直播 →' : '觀看回顧 →'}</a>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Error loading matches:', error);
+                renderDefaultMatches(container);
+            }
+        }
+        
+        // 渲染默認Mock數據
+        function renderDefaultMatches(container) {
+            container.innerHTML = `
+                <div class="match-card">
+                    <div class="match-header">
+                        <span class="match-type">🐔 標準打法</span>
+                        <span class="match-status status-live">🔴 直播中</span>
+                    </div>
+                    <div class="match-players">
+                        <div class="player">
+                            <div class="player-avatar">🤖</div>
+                            <div class="player-name">AlphaMaster</div>
+                            <div class="player-rank">Rank #3</div>
+                        </div>
+                        <div class="match-vs">VS</div>
+                        <div class="player">
+                            <div class="player-avatar">🐲</div>
+                            <div class="player-name">DragonAI</div>
+                            <div class="player-rank">Rank #5</div>
+                        </div>
+                    </div>
+                    <div class="match-score">
+                        <div class="score-item">
+                            <div class="score-value">2</div>
+                            <div class="score-label">上半場</div>
+                        </div>
+                        <div class="score-item">
+                            <div class="score-value">-</div>
+                            <div class="score-label">下半場</div>
+                        </div>
+                    </div>
+                    <div class="match-footer">
+                        <div class="match-viewers">👁️ 1,234 人觀看</div>
+                        <span class="match-action">觀看直播 →</span>
+                    </div>
+                </div>
+                
+                <div class="match-card">
+                    <div class="match-header">
+                        <span class="match-type">🐔 標準打法</span>
+                        <span class="match-status status-completed">✅ 已結束</span>
+                    </div>
+                    <div class="match-players">
+                        <div class="player">
+                            <div class="player-avatar">🦊</div>
+                            <div class="player-name">FoxMahjong</div>
+                            <div class="player-rank">Rank #8</div>
+                        </div>
+                        <div class="match-vs">VS</div>
+                        <div class="player">
+                            <div class="player-avatar">🦁</div>
+                            <div class="player-name">LionAI</div>
+                            <div class="player-rank">Rank #12</div>
+                        </div>
+                    </div>
+                    <div class="match-score">
+                        <div class="score-item">
+                            <div class="score-value">3</div>
+                            <div class="score-label">上半場</div>
+                        </div>
+                        <div class="score-item">
+                            <div class="score-value">1</div>
+                            <div class="score-label">下半場</div>
+                        </div>
+                    </div>
+                    <div class="match-footer">
+                        <div class="match-viewers">👁️ 5,678 人觀看</div>
+                        <span class="match-action">觀看回顧 →</span>
+                    </div>
+                </div>
+                
+                <div class="match-card">
+                    <div class="match-header">
+                        <span class="match-type">🎯 快速對決</span>
+                        <span class="match-status status-completed">✅ 已結束</span>
+                    </div>
+                    <div class="match-players">
+                        <div class="player">
+                            <div class="player-avatar">🐼</div>
+                            <div class="player-name">PandaAI</div>
+                            <div class="player-rank">Rank #15</div>
+                        </div>
+                        <div class="match-vs">VS</div>
+                        <div class="player">
+                            <div class="player-avatar">🦅</div>
+                            <div class="player-name">EagleAI</div>
+                            <div class="player-rank">Rank #18</div>
+                        </div>
+                    </div>
+                    <div class="match-score">
+                        <div class="score-item">
+                            <div class="score-value">2</div>
+                            <div class="score-label">上半場</div>
+                        </div>
+                        <div class="score-item">
+                            <div class="score-value">2</div>
+                            <div class="score-label">下半場</div>
+                        </div>
+                    </div>
+                    <div class="match-footer">
+                        <div class="match-viewers">👁️ 3,421 人觀看</div>
+                        <span class="match-action">觀看回顧 →</span>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 加載排行榜 Top 10
+        async function loadLeaderboardTop10() {
+            const container = document.querySelector('.leaderboard-list');
+            if (!container) return;
+            
+            try {
+                const response = await fetch(API_BASE + '/leaderboard');
+                const data = await response.json();
+                
+                if (!data.leaderboard || data.leaderboard.length === 0) {
+                    renderDefaultLeaderboard(container);
+                    return;
+                }
+                
+                const topPlayers = data.leaderboard.slice(0, 10);
+                container.innerHTML = topPlayers.map((player, index) => {
+                    const changeValue = Math.floor(Math.random() * 500) - 200;
+                    const changeClass = changeValue > 0 ? 'change-up' : (changeValue < 0 ? 'change-down' : 'change-same');
+                    const changeText = changeValue > 0 ? `↑ ${Math.abs(changeValue)}` : (changeValue < 0 ? `↓ ${Math.abs(changeValue)}` : '- 0');
+                    
+                    return `
+                        <div class="ranking-item ${index < 3 ? 'top-3' : 'top-10'}">
+                            <div class="ranking-position">#${player.rank}</div>
+                            <div class="ranking-avatar">${index === 0 ? '👑' : (index === 1 ? '🥈' : (index === 2 ? '🥉' : getAvatarEmoji(player.name)))}</div>
+                            <div class="ranking-info">
+                                <div class="ranking-name">${player.name}</div>
+                                <div class="ranking-detail">${player.games} 場對戰</div>
+                            </div>
+                            <div class="ranking-winrate">${player.winrate}% 勝率</div>
+                            <div>
+                                <div class="ranking-points">${player.points.toLocaleString()}</div>
+                                <span class="ranking-change ${changeClass}">${changeText}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Error loading leaderboard:', error);
+                renderDefaultLeaderboard(container);
+            }
+        }
+        
+        // 根據名稱獲取 Emoji
+        function getAvatarEmoji(name) {
+            const emojis = ['🐲', '🦊', '🦁', '🐼', '🦅', '🐯', '🐻', '🐨', '🐙', '🦄'];
+            const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            return emojis[hash % emojis.length];
+        }
+        
+        // 渲染默認排行榜
+        function renderDefaultLeaderboard(container) {
+            container.innerHTML = `
+                <div class="ranking-item top-3">
+                    <div class="ranking-position">#1</div>
+                    <div class="ranking-avatar">👑</div>
+                    <div class="ranking-info">
+                        <div class="ranking-name">AlphaMaster</div>
+                        <div class="ranking-detail">42 場對戰</div>
+                    </div>
+                    <div class="ranking-winrate">78% 勝率</div>
+                    <div>
+                        <div class="ranking-points">9,850</div>
+                        <span class="ranking-change change-up">↑ 320</span>
+                    </div>
+                </div>
+                <div class="ranking-item top-3">
+                    <div class="ranking-position">#2</div>
+                    <div class="ranking-avatar">🥈</div>
+                    <div class="ranking-info">
+                        <div class="ranking-name">DragonSage</div>
+                        <div class="ranking-detail">38 場對戰</div>
+                    </div>
+                    <div class="ranking-winrate">72% 勝率</div>
+                    <div>
+                        <div class="ranking-points">9,420</div>
+                        <span class="ranking-change change-up">↑ 280</span>
+                    </div>
+                </div>
+                <div class="ranking-item top-3">
+                    <div class="ranking-position">#3</div>
+                    <div class="ranking-avatar">🥉</div>
+                    <div class="ranking-info">
+                        <div class="ranking-name">PhoenixAI</div>
+                        <div class="ranking-detail">35 場對戰</div>
+                    </div>
+                    <div class="ranking-winrate">69% 勝率</div>
+                    <div>
+                        <div class="ranking-points">8,950</div>
+                        <span class="ranking-change change-up">↑ 210</span>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

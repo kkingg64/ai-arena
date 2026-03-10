@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🀄 AI Mahjong Arena - Live Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0f; }
+        #container { width: 100%; height: 100%; }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 25px;
+            color: #888;
+            font-family: 'Noto Sans HK', sans-serif;
+            font-size: 14px;
+            z-index: 100;
+        }
+        #gameStatus {
+            position: absolute;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,200,100,0.2);
+            border: 1px solid #00cc66;
+            padding: 8px 16px;
+            border-radius: 15px;
+            color: #00ff88;
+            font-family: 'Noto Sans HK', sans-serif;
+            font-size: 12px;
+            z-index: 100;
+            display: none;
+        }
+        #controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+        .btn {
+            background: linear-gradient(135deg, #00d4ff, #0088aa);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: 'Noto Sans HK', sans-serif;
+        }
+        .btn:hover { transform: scale(1.05); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        #wsStatus {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-family: 'Noto Sans HK', sans-serif;
+            z-index: 100;
+        }
+        .ws-connected { background: #00cc66; color: #000; }
+        .ws-disconnected { background: #cc3300; color: #fff; }
+        .ws-connecting { background: #ffaa00; color: #000; }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;700;900&display=swap" rel="stylesheet">
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="container"></div>
+    <div id="info">🀄 AI Mahjong Arena | Phase: Ready</div>
+    <div id="gameStatus"></div>
+    <div id="wsStatus" class="ws-disconnected">WebSocket: Disconnected</div>
+    <div id="controls">
+        <button class="btn" id="startBtn">🎮 開始遊戲</button>
+        <button class="btn" id="drawBtn" disabled>🎯 抽牌</button>
+        <button class="btn" id="discardBtn" disabled>🗑️ 打牌</button>
+        <button class="btn" id="resetBtn">🔄 重新開始</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ============== CONFIG ==============
+        const API_URL = 'http://76.13.215.13:8081';
+        const TILE_W = 0.3, TILE_H = 0.4, TILE_D = 0.2;
+        const TILE_GAP = 0.002;
+        const DISCARD_GAP = 0.005;
+        
+        // ============== GLOBALS ==============
+        let scene, camera, renderer, controls;
+        let tiles = [], handTiles = [], discardTiles = [], wallTiles = [];
+        let gameId = null;
+        let ws = null;
+        let currentPlayer = 0;
+        let myHand = [];
+        
+        const SUITS = { 
+            'W': {c:'#1a5c1a', n:'萬'}, 
+            'D': {c:'#1a1a5c', n:'筒'}, 
+            'S': {c:'#5c1a1a', n:'索'}, 
+            'Z': {c:'#1a5c1a', n:'字'},
+            'F': {c:'#2a5a2a', n:'花'},
+            'K': {c:'#5a2a5a', n:'季'}
+        };
+
+        // ============== INIT ==============
+        function init() {
+            const container = document.getElementById('container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0f);
+            scene.fog = new THREE.Fog(0x0a0a0f, 12, 35);
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 14, 16);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 10;
+            controls.maxDistance = 28;
+            controls.maxPolarAngle = Math.PI / 2.05;
+            controls.target.set(0, 0, 0);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 0.65);
+            scene.add(ambient);
+
+            const spot = new THREE.SpotLight(0xffffff, 2.2);
+            spot.position.set(0, 22, 0);
+            spot.angle = 0.45;
+            spot.penumbra = 0.25;
+            spot.castShadow = true;
+            spot.shadow.mapSize.set(2048, 2048);
+            spot.shadow.bias = -0.0001;
+            scene.add(spot);
+
+            const blue = new THREE.PointLight(0x4488ff, 0.45);
+            blue.position.set(7, 7, 7);
+            scene.add(blue);
+
+            const orange = new THREE.PointLight(0xff8844, 0.45);
+            orange.position.set(-7, 7, -7);
+            scene.add(orange);
+
+            // Table
+            const tableGeo = new THREE.PlaneGeometry(16, 16);
+            const tableMat = new THREE.MeshStandardMaterial({ color: 0x0d1b2a, roughness: 0.7, metalness: 0.08 });
+            const table = new THREE.Mesh(tableGeo, tableMat);
+            table.rotation.x = -Math.PI / 2;
+            table.position.y = -0.12;
+            table.receiveShadow = true;
+            scene.add(table);
+
+            // Shadow plane
+            const shadowMat = new THREE.ShadowMaterial({ opacity: 0.65 });
+            const shadow = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), shadowMat);
+            shadow.rotation.x = -Math.PI / 2;
+            shadow.position.y = -0.11;
+            shadow.receiveShadow = true;
+            scene.add(shadow);
+
+            createCentralHub();
+            createWall();
+            createDemoTiles();
+
+            window.addEventListener('resize', onResize);
+            animate();
+
+            document.getElementById('startBtn').addEventListener('click', startGame);
+            document.getElementById('drawBtn').addEventListener('click', drawTile);
+            document.getElementById('discardBtn').addEventListener('click', discardTile);
+            document.getElementById('resetBtn').addEventListener('click', resetGame);
+        }
+
+        // ============== CENTRAL HUB ==============
+        function createCentralHub() {
+            const hubGeo = new THREE.CylinderGeometry(1.6, 1.6, 0.12, 32);
+            const hubMat = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.18,
+                transmission: 0.88,
+                roughness: 0.03,
+                metalness: 0,
+                thickness: 0.6,
+            });
+            const hub = new THREE.Mesh(hubGeo, hubMat);
+            hub.position.y = 0.06;
+            scene.add(hub);
+
+            createText('東 1 局', 0, 0.14, 0, 0.6, 0xffd700);
+            createText('莊家：東', 0, 0.14, -0.8, 0.22, 0x888888);
+
+            const dirs = ['南', '西', '北', '東'];
+            const scores = [25000, 25000, 25000, 25000];
+            for (let i = 0; i < 4; i++) {
+                const angle = (i * Math.PI) / 2;
+                const x = Math.sin(angle) * 1.3;
+                const z = Math.cos(angle) * 1.3;
+                createText(scores[i].toLocaleString(), x, 0.14, z, 0.3, 0xffffff);
+                createText(dirs[i], x, 0.14, z + 0.3, 0.15, 0x666666);
+            }
+        }
+
+        function createText(text, x, y, z, size, color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#00000000';
+            ctx.fillRect(0, 0, 512, 128);
+            ctx.font = `900 ${size * 100}px "Noto Sans HK", sans-serif`;
+            ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 256, 64);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size * 3.8, size * 0.95), mat);
+            mesh.position.set(x, y, z);
+            mesh.rotation.x = -Math.PI / 2;
+            scene.add(mesh);
+            return mesh;
+        }
+
+        // ============== WALL ==============
+        function createWall() {
+            wallTiles.forEach(w => scene.remove(w));
+            wallTiles = [];
+
+            const wallDist = 4.8;
+            const cols = 18;
+            const layerGap = TILE_D + 0.01;
+
+            for (let layer = 0; layer < 2; layer++) {
+                // Top
+                for (let i = 0; i < cols; i++) {
+                    const x = (i - cols/2 + 0.5) * TILE_W;
+                    const z = -wallDist - layer * layerGap;
+                    createWallTile(x, z);
+                }
+                // Bottom
+                for (let i = 0; i < cols; i++) {
+                    const x = (i - cols/2 + 0.5) * TILE_W;
+                    const z = wallDist + layer * layerGap;
+                    createWallTile(x, z);
+                }
+                // Left
+                for (let i = 0; i < 6; i++) {
+                    const x = -wallDist - layer * layerGap;
+                    const z = (i - 3) * TILE_H;
+                    createWallTile(x, z);
+                }
+                // Right
+                for (let i = 0; i < 6; i++) {
+                    const x = wallDist + layer * layerGap;
+                    const z = (i - 3) * TILE_H;
+                    createWallTile(x, z);
+                }
+            }
+        }
+
+        function createWallTile(x, z) {
+            const geo = new THREE.BoxGeometry(TILE_W, TILE_H, TILE_D);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x1a3a5c, roughness: 0.28, metalness: 0.08 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, TILE_H/2, z);
+            mesh.castShadow = true;
+            scene.add(mesh);
+            wallTiles.push(mesh);
+        }
+
+        // ============== TILE TEXTURE ==============
+        function createTileTexture(tileId) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 341;
+            const ctx = canvas.getContext('2d');
+
+            // Parse tile ID (e.g., "1W", "5D", "1Z")
+            const value = tileId.charAt(0);
+            const suit = tileId.charAt(1);
+            
+            // Gradient background
+            const grad = ctx.createLinearGradient(0, 0, 256, 341);
+            grad.addColorStop(0, '#faf6ef');
+            grad.addColorStop(1, '#e8dfcf');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 256, 341);
+
+            // Border
+            ctx.strokeStyle = '#c9b896';
+            ctx.lineWidth = 9;
+            ctx.strokeRect(5, 5, 246, 331);
+
+            // Color
+            let color = SUITS[suit]?.c || '#1a1a1a';
+            if (['3','6','9'].includes(value) || ['中','發','5Z','1Z','2Z','3Z','4Z','6Z','7Z'].includes(tileId)) color = '#b01830';
+
+            // Corner number
+            ctx.fillStyle = color;
+            ctx.font = 'bold 28px "Noto Sans HK"';
+            ctx.textAlign = 'left';
+            ctx.fillText(value, 15, 38);
+
+            // Center character
+            ctx.font = 'bold 135px "Noto Sans HK"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            let suitChar = SUITS[suit]?.n || suit;
+            ctx.fillText(suitChar, 128, 175);
+
+            // Shine
+            const shine = ctx.createLinearGradient(0, 0, 0, 80);
+            shine.addColorStop(0, 'rgba(255,255,255,0.22)');
+            shine.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = shine;
+            ctx.fillRect(6, 6, 244, 75);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // ============== CREATE TILE ==============
+        function createTile(tileId, x, y, z, rotX = 0, rotY = 0, rotZ = 0, faceDown = false) {
+            const group = new THREE.Group();
+            group.position.set(x, y, z);
+            group.rotation.set(rotX, rotY, rotZ);
+
+            const geo = new THREE.BoxGeometry(TILE_W, TILE_H, TILE_D);
+            
+            const value = tileId ? tileId.charAt(0) : '?';
+            const suit = tileId ? tileId.charAt(1) : '?';
+            
+            const frontMat = faceDown 
+                ? new THREE.MeshStandardMaterial({ color: 0x1a3a5c, roughness: 0.28, metalness: 0.08 })
+                : new THREE.MeshStandardMaterial({ map: createTileTexture(tileId), roughness: 0.32, metalness: 0.02 });
+            
+            const sideMat = new THREE.MeshStandardMaterial({ color: 0xf0ebe0, roughness: 0.42, metalness: 0.02 });
+            
+            const materials = [sideMat, sideMat, sideMat, sideMat, frontMat, new THREE.MeshStandardMaterial({ color: 0xf8f4eb, roughness: 0.32 })];
+
+            const mesh = new THREE.Mesh(geo, materials);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+
+            // Edge
+            const edges = new THREE.EdgesGeometry(geo);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.12, transparent: true }));
+            group.add(line);
+
+            group.userData = { tileId, faceDown };
+            scene.add(group);
+            return group;
+        }
+
+        // ============== DEMO ==============
+        function createDemoTiles() {
+            clearAllTiles();
+
+            const demoHands = [
+                ['1W','2W','3W','4W','5W','6W','7W','8W','9W','1D','2D','3D','4D','5D'],
+                ['1S','2S','3S','4S','5S','6S','7S','8S','9S','1Z','2Z','3Z','4Z','5Z'],
+                ['1W','1W','1D','1D','1S','1S','2Z','2Z','3Z','3Z','4Z','4Z','5Z','5Z'],
+                ['6W','6W','7W','7W','8W','8W','9W','9W','6D','6D','7D','7D','8D','8D'],
+            ];
+
+            demoHands.forEach((hand, pIdx) => {
+                hand.forEach((tileId, tIdx) => {
+                    const [pos, rot] = getHandPos(pIdx, tIdx);
+                    const tile = createTile(tileId, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2], pIdx !== 0);
+                    handTiles.push(tile);
+                });
+            });
+
+            // Labels
+            const labels = ['Player 0', 'Player 1', 'Player 2', 'Player 3'];
+            const dirs = ['南', '西', '北', '東'];
+            const posList = [[0, 1, 4.2], [4.2, 1, 0], [0, 1, -4.2], [-4.2, 1, 0]];
+            posList.forEach((pos, i) => createText(labels[i] + ' ' + dirs[i], pos[0], pos[1], pos[2], 0.38, 0xffffff));
+        }
+
+        function clearAllTiles() {
+            tiles.forEach(t => scene.remove(t));
+            handTiles.forEach(t => scene.remove(t));
+            discardTiles.forEach(t => scene.remove(t));
+            tiles = []; handTiles = []; discardTiles = [];
+        }
+
+        // ============== HAND POS ==============
+        function getHandPos(pIdx, tIdx) {
+            const dist = 3.8;
+            const spacing = TILE_W + TILE_GAP;
+            const offset = (tIdx - 6.5) * spacing;
+            const tilt = -0.26;
+            
+            switch(pIdx) {
+                case 0: return [[offset, TILE_H/2 + 0.001, dist], [tilt, 0, 0]];
+                case 1: return [[-dist, TILE_H/2 + 0.001, offset], [tilt, Math.PI/2, 0]];
+                case 2: return [[-offset, TILE_H/2 + 0.001, -dist], [tilt, Math.PI, 0]];
+                case 3: return [[dist, TILE_H/2 + 0.001, -offset], [tilt, -Math.PI/2, 0]];
+            }
+        }
+
+        function getDiscardPos(pIdx, tIdx) {
+            const row = Math.floor(tIdx / 6);
+            const col = tIdx % 6;
+            const dist = 1.8;
+            const gap = DISCARD_GAP;
+            const sx = TILE_W + gap;
+            const sz = TILE_D + gap;
+            const y = TILE_D/2 + 0.002;
+            
+            switch(pIdx) {
+                case 0: return [[(col - 2.5) * sx, y, dist + row * sz], [-Math.PI/2, 0, 0]];
+                case 1: return [[-dist - row * sz, y, (col - 2.5) * sx], [-Math.PI/2, Math.PI/2, 0]];
+                case 2: return [[-(col - 2.5) * sx, y, -dist - row * sz], [-Math.PI/2, Math.PI, 0]];
+                case 3: return [[dist + row * sz, y, -(col - 2.5) * sx], [-Math.PI/2, -Math.PI/2, 0]];
+            }
+        }
+
+        // ============== GAME LOGIC ==============
+        async function startGame() {
+            try {
+                updateStatus('正在創建遊戲...', 'connecting');
+                
+                // Create game via API
+                const response = await fetch(`${API_URL}/api/games?debug=true`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ players: [] })
+                });
+                
+                if (!response.ok) throw new Error('Failed to create game');
+                
+                const game = await response.json();
+                gameId = game.game_id;
+                
+                updateStatus(`遊戲已創建: ${gameId}`, 'connected');
+                document.getElementById('info').textContent = `🀄 AI Mahjong Arena | Game: ${gameId.slice(0,8)}...`;
+                
+                // 🔥 自動開始 AI 對戰 loop
+                try {
+                    updateStatus('正在啟動 AI 對戰...', 'connecting');
+                    const aiResponse = await fetch(`${API_URL}/api/debug/start-ai/${gameId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    if (aiResponse.ok) {
+                        const aiResult = await aiResponse.json();
+                        console.log('AI Started:', aiResult);
+                        updateStatus('AI 對戰已開始！', 'connected');
+                    } else {
+                        console.error('AI start failed:', aiResponse.status);
+                        updateStatus('AI 啟動失敗，但遊戲已創建', 'error');
+                    }
+                } catch (aiError) {
+                    console.error('AI start error:', aiError);
+                    updateStatus('AI 啟動錯誤，但遊戲已創建', 'error');
+                }
+                
+                // Connect WebSocket
+                connectWebSocket();
+                
+                // Enable buttons
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('drawBtn').disabled = false;
+                document.getElementById('discardBtn').disabled = false;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus(`錯誤: ${error.message}`, 'error');
+            }
+        }
+
+        function connectWebSocket() {
+            const wsUrl = `ws://76.13.215.13:8081/ws/game/${gameId}`;
+            ws = new WebSocket(wsUrl);
+            
+            updateWSStatus('connecting');
+            
+            ws.onopen = () => {
+                updateWSStatus('connected');
+                console.log('WebSocket connected');
+            };
+            
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                handleWSMessage(msg);
+            };
+            
+            ws.onclose = () => {
+                updateWSStatus('disconnected');
+                console.log('WebSocket disconnected');
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateStatus('WebSocket 錯誤', 'error');
+            };
+        }
+
+        function handleWSMessage(msg) {
+            console.log('WS Message:', msg);
+            
+            switch(msg.type) {
+                case 'game_state':
+                    updateGameState(msg.data);
+                    break;
+                case 'ai_thinking':
+                    updateStatus(`${msg.data.player_name} 思考中...`, 'thinking');
+                    break;
+                case 'ai_decision':
+                    updateStatus(`${msg.data.player_name}: ${msg.data.action}`, 'connected');
+                    break;
+                case 'tile_discarded':
+                    addDiscardTile(msg.data.player_id, msg.data.tile);
+                    break;
+                case 'error':
+                    updateStatus(`錯誤: ${msg.data.error}`, 'error');
+                    break;
+            }
+        }
+
+        function updateGameState(state) {
+            console.log('Game state:', state);
+            
+            currentPlayer = state.current_player;
+            
+            // Update hand tiles for player 0
+            if (state.players && state.players[0]) {
+                updatePlayerHand(0, state.players[0].hand);
+            }
+            
+            // Update discards for all players
+            if (state.players) {
+                state.players.forEach((p, i) => {
+                    updatePlayerDiscards(i, p.discards || []);
+                });
+            }
+            
+            // Show game status
+            const statusEl = document.getElementById('gameStatus');
+            statusEl.style.display = 'block';
+            statusEl.textContent = `狀態: ${state.game_status} | 當前: Player ${currentPlayer} | 牌牆: ${state.wall_remaining}`;
+        }
+
+        function updatePlayerHand(pIdx, hand) {
+            // Remove old hand tiles
+            handTiles.forEach(t => scene.remove(t));
+            handTiles = [];
+            
+            // Add new hand tiles
+            hand.forEach((tileId, tIdx) => {
+                const [pos, rot] = getHandPos(pIdx, tIdx);
+                const tile = createTile(tileId, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2], pIdx !== 0);
+                handTiles.push(tile);
+            });
+        }
+
+        function updatePlayerDiscards(pIdx, discards) {
+            // Clear old discards for this player
+            discardTiles.forEach(t => {
+                if (t.userData.playerIdx === pIdx) {
+                    scene.remove(t);
+                }
+            });
+            discardTiles = discardTiles.filter(t => t.userData.playerIdx !== pIdx);
+            
+            // Add new discards
+            discards.forEach((tileId, tIdx) => {
+                const [pos, rot] = getDiscardPos(pIdx, tIdx);
+                const tile = createTile(tileId, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2], false);
+                tile.userData.playerIdx = pIdx;
+                discardTiles.push(tile);
+            });
+        }
+
+        function addDiscardTile(playerId, tileId) {
+            // Find player index
+            const pIdx = 0; // Simplified - would need to match player_id
+            
+            const posList = [[0, 1, 4.2], [4.2, 1, 0], [0, 1, -4.2], [-4.2, 1, 0]];
+            const tIdx = discardTiles.filter(t => t.userData.playerIdx === pIdx).length;
+            
+            const [pos, rot] = getDiscardPos(pIdx, tIdx);
+            const tile = createTile(tileId, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2], false);
+            tile.userData.playerIdx = pIdx;
+            discardTiles.push(tile);
+        }
+
+        async function drawTile() {
+            if (!gameId) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/games/${gameId}`);
+                const state = await response.json();
+                updateGameState(state);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function discardTile() {
+            if (!gameId) return;
+            
+            // For demo, discard a random tile
+            const tiles = ['1W', '2W', '3W', '1D', '2D', '3D', '1S', '2S', '3S'];
+            const tile = tiles[Math.floor(Math.random() * tiles.length)];
+            
+            try {
+                await fetch(`${API_URL}/api/games/${gameId}/action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        player_id: 'ai-minimax-a-000',
+                        action: 'discard',
+                        tile: tile
+                    })
+                });
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function resetGame() {
+            gameId = null;
+            currentPlayer = 0;
+            
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            
+            createWall();
+            createDemoTiles();
+            
+            updateStatus('Ready', 'disconnected');
+            updateWSStatus('disconnected');
+            document.getElementById('info').textContent = '🀄 AI Mahjong Arena | Phase: Ready';
+            document.getElementById('gameStatus').style.display = 'none';
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('drawBtn').disabled = true;
+            document.getElementById('discardBtn').disabled = true;
+        }
+
+        function updateStatus(text, type) {
+            const el = document.getElementById('gameStatus');
+            el.style.display = 'block';
+            el.textContent = text;
+            
+            if (type === 'connected') {
+                el.style.background = 'rgba(0,200,100,0.2)';
+                el.style.borderColor = '#00cc66';
+                el.style.color = '#00ff88';
+            } else if (type === 'connecting') {
+                el.style.background = 'rgba(255,170,0,0.2)';
+                el.style.borderColor = '#ffaa00';
+                el.style.color = '#ffaa00';
+            } else if (type === 'error') {
+                el.style.background = 'rgba(200,0,0,0.2)';
+                el.style.borderColor = '#cc0000';
+                el.style.color = '#ff4444';
+            } else if (type === 'thinking') {
+                el.style.background = 'rgba(100,100,200,0.2)';
+                el.style.borderColor = '#6666cc';
+                el.style.color = '#8888ff';
+            }
+        }
+
+        function updateWSStatus(status) {
+            const el = document.getElementById('wsStatus');
+            el.className = `ws-${status}`;
+            
+            if (status === 'connected') {
+                el.textContent = 'WebSocket: Connected';
+            } else if (status === 'connecting') {
+                el.textContent = 'WebSocket: Connecting...';
+            } else {
+                el.textContent = 'WebSocket: Disconnected';
+            }
+        }
+
+        // ============== LOOP ==============
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        init();
+    </script>
+</body>
+</html>
