@@ -35,8 +35,8 @@ canvas{display:block}
 <button class="btn" style="padding:5px 10px" onclick="toggleAutoPlay()">⏯️ <span id="autoplay-btn">暫停</span></button>
 </div>
 <div class="player-label top" id="player-2"><div>西</div><div class="ai-name">Claude</div></div>
-<div class="player-label left" id="player-3"><div>南</div><div class="ai-name">Gemini</div></div>
-<div class="player-label right" id="player-1"><div>北</div><div class="ai-name">Llama</div></div>
+<div class="player-label left" id="player-3"><div>北</div><div class="ai-name">Gemini</div></div>
+<div class="player-label right" id="player-1"><div>南</div><div class="ai-name">Llama</div></div>
 <div class="player-label bottom" id="player-0"><div>東</div><div class="ai-name">GPT-4o</div></div>
 <div class="thought-stream">
 <div style="color:#3498db;margin-bottom:5px">🧠 <span id="thinking-player">東家</span> 思考中...</div>
@@ -50,14 +50,14 @@ canvas{display:block}
 </div>
 
 <script>
-console.log('Starting Mahjong Arena - Ultimate Fix v2...');
+console.log('Starting Mahjong Arena...');
 
-// BoxGeometry(width, height, depth) = (0.28, 0.06, 0.4)
-// TOP face (materials[2]) is 0.28 x 0.4
-var TILE_W = 0.28, TILE_H = 0.06, TILE_D = 0.4;
+var TILE_W = 0.28, TILE_H = 0.08, TILE_D = 0.4;
 var HAND_SPACING = 0.3;
-var DISCARD_SPACING = 0.32;
-var DISCARD_Y = 0.03;
+var DISCARD_W = 0.35;
+var DISCARD_D = 0.5;
+var DISCARD_OFFSET = 0.7;
+var DISCARD_Y = 0.1;
 
 var tileMeshes = {hand:[[],[],[],[]], discard:[[],[],[],[]]};
 var riverGroup;
@@ -74,20 +74,6 @@ var gameState = {
   currentTurn: 0, wall:[], dealer:0, round:1, pool:0
 };
 
-// Chinese mapping
-var CHINESE_MAP = {
-  'M1': '一萬', 'M2': '二萬', 'M3': '三萬', 'M4': '四萬', 'M5': '五萬',
-  'M6': '六萬', 'M7': '七萬', 'M8': '八萬', 'M9': '九萬',
-  'D1': '一筒', 'D2': '二筒', 'D3': '三筒', 'D4': '四筒', 'D5': '五筒',
-  'D6': '六筒', 'D7': '七筒', 'D8': '八筒', 'D9': '九筒',
-  'S1': '一索', 'S2': '二索', 'S3': '三索', 'S4': '四索', 'S5': '五索',
-  'S6': '六索', 'S7': '七索', 'S8': '八索', 'S9': '九索',
-  'E': '東', 'S_h': '南', 'W': '西', 'N': '北',
-  'R': '中', 'G': '發', 'B': '白',
-  'F1': '梅', 'F2': '蘭', 'F3': '菊', 'F4': '竹',
-  'F5': '春', 'F6': '夏', 'F7': '秋', 'F8': '冬'
-};
-
 function sortHand(hand) {
   var suitOrder = {'M': 1, 'D': 2, 'S': 3, 'F': 4, 'E': 5, 'S_h': 6, 'W': 7, 'N': 8, 'R': 9, 'G': 10, 'B': 11};
   hand.sort(function(a, b) {
@@ -100,138 +86,111 @@ function sortHand(hand) {
   });
 }
 
-// Create texture with proper rotation for each player
-function createTileTexture(label, playerIndex) {
+function createTileTexture(label) {
   var canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 170;
+  canvas.width = 512;
+  canvas.height = 512;
   var ctx = canvas.getContext('2d');
   
-  // Ivory background
-  ctx.fillStyle = '#f5f0e1';
-  ctx.fillRect(0, 0, 256, 170);
+  // White background
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, 512, 512);
   
-  // Border
-  ctx.strokeStyle = '#8b7355';
-  ctx.lineWidth = 8;
-  ctx.strokeRect(4, 4, 248, 162);
+  // Gray border
+  ctx.strokeStyle = '#BBBBBB';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(8, 8, 496, 496);
   
-  var displayText = CHINESE_MAP[label] || label;
-  var suit = label.replace(/[0-9]/g, '');
+  // Chinese mapping - FIXED to match "1M" format
+  var map = {
+    '1M':'一萬','2M':'二萬','3M':'三萬','4M':'四萬','5M':'五萬','6M':'六萬','7M':'七萬','8M':'八萬','9M':'九萬',
+    '1D':'一筒','2D':'二筒','3D':'三筒','4D':'四筒','5D':'五筒','6D':'六筒','7D':'七筒','8D':'八筒','9D':'九筒',
+    '1S':'一索','2S':'二索','3S':'三索','4S':'四索','5S':'五索','6S':'六索','7S':'七索','8S':'八索','9S':'九索',
+    'E':'東','S_h':'南','W':'西','N':'北','R':'中','G':'發','B':'白',
+    'F1':'梅','F2':'蘭','F3':'菊','F4':'竹','F5':'春','F6':'夏','F7':'秋','F8':'冬'
+  };
+  
+  var text = map[label] || label;
   
   // Color by suit
-  if (suit === 'M') ctx.fillStyle = '#c0392b';      // Red for 萬
-  else if (suit === 'S') ctx.fillStyle = '#1e8449'; // Green for 索
-  else if (suit === 'D') ctx.fillStyle = '#1a5276'; // Blue for 筒
-  else ctx.fillStyle = '#1c2833';                   // Dark for 字
+  if (label.endsWith('M')) ctx.fillStyle = '#C41E3A';
+  else if (label.endsWith('D')) ctx.fillStyle = '#1E3A5F';
+  else if (label.endsWith('S')) ctx.fillStyle = '#228B22';
+  else if (['E','S_h','W','N'].includes(label)) ctx.fillStyle = '#1E3A5F';
+  else if (label === 'R') ctx.fillStyle = '#C41E3A';
+  else if (label === 'G') ctx.fillStyle = '#228B22';
+  else if (label === 'B') ctx.fillStyle = '#1E3A5F';
+  else ctx.fillStyle = '#333333';
   
-  // Texture rotation based on player position
-  // P0 (bottom): 0, P1 (right): -90, P2 (top): 180, P3 (left): 90
-  var textRot = 0;
-  if (playerIndex === 1) textRot = -Math.PI / 2;
-  else if (playerIndex === 2) textRot = Math.PI;
-  else if (playerIndex === 3) textRot = Math.PI / 2;
-  
+  // Main text - bold 320px
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.save();
-  ctx.translate(128, 85);
-  ctx.rotate(textRot);
-  
-  // Bold text, 80% of canvas
-  if (displayText.length >= 2) {
-    ctx.font = 'bold 58px "Microsoft JhengHei", "SimHei", sans-serif';
-    ctx.fillText(displayText[0], 0, -28);
-    ctx.fillText(displayText[1], 0, 28);
-  } else {
-    ctx.font = 'bold 95px "Microsoft JhengHei", "SimHei", sans-serif';
-    ctx.fillText(displayText, 0, 0);
-  }
-  ctx.restore();
+  ctx.font = 'bold 320px "Microsoft JhengHei", "微軟正黑體", sans-serif';
+  ctx.fillText(text, 256, 280);
   
   // Corner numbers
-  ctx.fillStyle = '#333';
-  ctx.font = 'bold 20px Arial';
-  ctx.fillText(label.replace(/[A-Z]/g, ''), 22, 24);
-  ctx.fillText(label.replace(/[A-Z]/g, ''), 234, 156);
-  
-  var texture = new THREE.CanvasTexture(canvas);
-  texture.center.set(0.5, 0.5);
-  return texture;
-}
-
-function createTileMesh(label, playerIndex) {
-  // TOP face (materials[2]) = Chinese text
-  var faceTex = createTileTexture(label, playerIndex);
-  
-  // Back texture (blue)
-  var backCanvas = document.createElement('canvas');
-  backCanvas.width = 256;
-  backCanvas.height = 170;
-  var bx = backCanvas.getContext('2d');
-  bx.fillStyle = '#1a3a5c';
-  bx.fillRect(0, 0, 256, 170);
-  bx.strokeStyle = '#2c5f8a';
-  bx.lineWidth = 6;
-  bx.strokeRect(6, 6, 244, 158);
-  var backTex = new THREE.CanvasTexture(backCanvas);
-  
-  // White plastic sides
-  var sideMat = new THREE.MeshPhongMaterial({color: 0xf5f0e1});
-  
-  // TOP (index 2) = face with text
-  var faceMat = new THREE.MeshPhongMaterial({map: faceTex});
-  if (playerIndex > 0) {
-    faceMat.emissive = new THREE.Color(gameState.players[playerIndex].color);
-    faceMat.emissiveIntensity = 0.1;
+  ctx.font = 'bold 56px "Microsoft JhengHei", "微軟正黑體", sans-serif';
+  var cornerNum = text.replace(/[^0-9]/g, '');
+  if (cornerNum && text.length <= 2) {
+    ctx.fillText(cornerNum, 48, 48);
+    ctx.fillText(cornerNum, 464, 464);
   }
   
-  // BOTTOM (index 3) = back
-  var backMat = new THREE.MeshPhongMaterial({map: backTex});
+  var texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
   
-  // BoxGeometry materials: [right, left, TOP, BOTTOM, front, back]
-  // materials[2] = TOP = face with Chinese text
-  var materials = [sideMat, sideMat, faceMat, backMat, sideMat, sideMat];
+  // Fix stretching: 0.28/0.4 = 0.7
+  texture.repeat.set(1, 0.7);
+  texture.offset.set(0, 0.15);
   
+  return texture;
+}
+function createTile(label, playerIndex) {
   var geometry = new THREE.BoxGeometry(TILE_W, TILE_H, TILE_D);
+  var texture = createTileTexture(label);
+  var faceMat = new THREE.MeshLambertMaterial({ map: texture });
+  var sideMat = new THREE.MeshLambertMaterial({ color: 0xE8DCC8 });
+  var backMat = new THREE.MeshLambertMaterial({ color: 0x234d32 });
+  var materials = [sideMat, sideMat, faceMat, backMat, sideMat, sideMat];
   var mesh = new THREE.Mesh(geometry, materials);
   mesh.castShadow = true;
+  mesh.rotation.y = getMeshRotationY(playerIndex);
   return mesh;
+}
+
+function getMeshRotationY(playerIndex) {
+  if (playerIndex === 0) return 0;
+  if (playerIndex === 1) return Math.PI / 2;
+  if (playerIndex === 2) return Math.PI;
+  return -Math.PI / 2;
 }
 
 function init() {
   console.log('Initializing...');
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x050a0f);
-  
   camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
   camera.position.set(0, 12, 10);
-  
   renderer = new THREE.WebGLRenderer({antialias: true});
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
-  
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.maxPolarAngle = Math.PI / 2.2;
+  controls.maxPolarAngle = Math.PI/2.2;
   controls.target.set(0, 0, 0);
   controls.update();
-  
   scene.add(new THREE.AmbientLight(0xffffff, 0.85));
   var dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
   dirLight.position.set(5, 15, 5);
   scene.add(dirLight);
-  
-  // River group - persistent discards
   riverGroup = new THREE.Group();
   scene.add(riverGroup);
-  
   createTable();
   initGame();
   renderAll();
-  
   document.getElementById('loading').style.display = 'none';
-  console.log('Ready!');
+  console.log("Ready! Players discards:", gameState.players.map(function(p){return p.discards.length}));
   animate();
   startAutoPlay();
 }
@@ -240,26 +199,13 @@ function initGame() {
   var suits = ['M', 'D', 'S'];
   var honors = ['E', 'S_h', 'W', 'N', 'R', 'G', 'B'];
   var flowers = ['F1','F2','F3','F4','F5','F6','F7','F8'];
-  
   var tiles = [];
   for(var s of suits) for(var n=1; n<=9; n++) for(var i=0; i<4; i++) tiles.push(n + s);
   for(var h of honors) for(var i=0; i<4; i++) tiles.push(h);
   for(var f of flowers) tiles.push(f);
-  
-  for(var i=tiles.length-1; i>0; i--) {
-    var j = Math.floor(Math.random() * (i + 1));
-    var tmp = tiles[i]; tiles[i] = tiles[j]; tiles[j] = tmp;
-  }
-  
+  for(var i=tiles.length-1; i>0; i--) { var j=Math.floor(Math.random()*(i+1)); var tmp=tiles[i]; tiles[i]=tiles[j]; tiles[j]=tmp; }
   gameState.wall = tiles;
-  
-  for(var p=0; p<4; p++) {
-    gameState.players[p].hand = [];
-    gameState.players[p].discards = [];
-    for(var i=0; i<13; i++) gameState.players[p].hand.push(tiles.pop());
-    sortHand(gameState.players[p].hand);
-  }
-  
+  for(var p=0; p<4; p++) { gameState.players[p].hand = []; gameState.players[p].discards = []; for(var i=0; i<13; i++) gameState.players[p].hand.push(tiles.pop()); sortHand(gameState.players[p].hand); }
   document.getElementById('remain').textContent = tiles.length;
 }
 
@@ -273,59 +219,54 @@ function createTable() {
 
 function getHandPos(p, i) {
   var s = HAND_SPACING;
-  if(p === 0) return new THREE.Vector3((i - 6) * s, TILE_H/2 + 0.005, 4.0);
-  if(p === 1) return new THREE.Vector3(4.3, TILE_H/2 + 0.005, (i - 6) * s);
-  if(p === 2) return new THREE.Vector3((6 - i) * s, TILE_H/2 + 0.005, -4.0);
-  return new THREE.Vector3(-4.3, TILE_H/2 + 0.005, (6 - i) * s);
+  if(p===0) return new THREE.Vector3((i-6)*s, TILE_H/2+0.005, 4.0);
+  if(p===1) return new THREE.Vector3(4.3, TILE_H/2+0.005, (i-6)*s);
+  if(p===2) return new THREE.Vector3((6-i)*s, TILE_H/2+0.005, -4.0);
+  return new THREE.Vector3(-4.3, TILE_H/2+0.005, (6-i)*s);
 }
 
-// Tiles lie flat, TOP face up, rotate Y to face camera
-function getHandRot(p) {
-  if(p === 0) return new THREE.Euler(-Math.PI/2, 0, 0);           // South
-  if(p === 1) return new THREE.Euler(-Math.PI/2, -Math.PI/2, 0);  // West
-  if(p === 2) return new THREE.Euler(-Math.PI/2, Math.PI, 0);      // North
-  return new THREE.Euler(-Math.PI/2, Math.PI/2, 0);                // East
-}
-
+// ============================================================
+// UPDATED getDiscardPos - Better spacing and alignment
+// ============================================================
 function getDiscardPos(p, i) {
-  var r = Math.floor(i / 6), c = i % 6;
-  var s = DISCARD_SPACING;
-  var d = 2.2;
+  var row = Math.floor(i / 6);
+  var col = i % 6;
+  var w = 0.35;
+  var d = 0.5;
   
-  if(p === 0) return new THREE.Vector3((c - 2.5) * s, DISCARD_Y, d + r * s);
-  if(p === 1) return new THREE.Vector3(-d - r * s, DISCARD_Y, (c - 2.5) * s);
-  if(p === 2) return new THREE.Vector3(-(c - 2.5) * s, DISCARD_Y, -d - r * s);
-  return new THREE.Vector3(d + r * s, DISCARD_Y, -(c - 2.5) * s);
-}
-
-function getDiscardRot(p) { return getHandRot(p); }
-
-function renderAll() {
-  // Clear but preserve riverGroup content
-  for(var p = 0; p < 4; p++) {
-    tileMeshes.hand[p].forEach(function(m) { scene.remove(m); });
-    tileMeshes.discard[p].forEach(function(m) { riverGroup.remove(m); });
-    tileMeshes.hand[p] = [];
-    tileMeshes.discard[p] = [];
+  // Each player has their own corner far from center
+  if(p === 0) {
+    // East (bottom) - close to camera, spread X
+    return new THREE.Vector3(col * w - 0.875, 0.1, 1.2 + row * d);
+  } else if(p === 1) {
+    // South (right) - right side
+    return new THREE.Vector3(1.2 + row * d, 0.1, col * w - 0.875);
+  } else if(p === 2) {
+    // West (top) - far from camera
+    return new THREE.Vector3(-col * w + 0.875, 0.1, -1.2 - row * d);
+  } else {
+    // North (left) - left side
+    return new THREE.Vector3(-1.2 - row * d, 0.1, -col * w + 0.875);
   }
+}
+function renderAll() {
+  for(var p=0; p<4; p++) { tileMeshes.hand[p].forEach(function(m){scene.remove(m)}); tileMeshes.hand[p]=[]; }
+  riverGroup.clear();
+  for(var p=0; p<4; p++) { tileMeshes.discard[p]=[]; }
   
-  // Render hands
-  for(var p = 0; p < 4; p++) {
-    for(var i = 0; i < gameState.players[p].hand.length; i++) {
-      var tile = createTileMesh(gameState.players[p].hand[i], p);
-      tile.position.copy(getHandPos(p, i));
-      tile.rotation.copy(getHandRot(p));
+  for(var p=0; p<4; p++) {
+    for(var i=0; i<gameState.players[p].hand.length; i++) {
+      var tile = createTile(gameState.players[p].hand[i], p);
+      tile.position.copy(getHandPos(p,i));
       scene.add(tile);
       tileMeshes.hand[p].push(tile);
     }
   }
   
-  // Render discards - PERSISTENT in riverGroup
-  for(var p = 0; p < 4; p++) {
-    for(var i = 0; i < gameState.players[p].discards.length; i++) {
-      var tile = createTileMesh(gameState.players[p].discards[i], p);
+  for(var p=0; p<4; p++) {
+    for(var i=0; i<gameState.players[p].discards.length; i++) {
+      var tile = createTile(gameState.players[p].discards[i], p);
       tile.position.copy(getDiscardPos(p, i));
-      tile.rotation.copy(getDiscardRot(p));
       riverGroup.add(tile);
       tileMeshes.discard[p].push(tile);
     }
@@ -333,94 +274,43 @@ function renderAll() {
 }
 
 function nextTurn() {
-  if(isAnimating || gameState.wall.length === 0) return;
-  isAnimating = true;
-  
-  var p = gameState.currentTurn;
+  if(isAnimating || gameState.wall.length===0) return;
+  isAnimating=true;
+  var p=gameState.currentTurn;
   updateCurrentPlayerUI(p);
-  document.getElementById('ai-text').textContent = gameState.players[p].name + ' 分析中...';
-  
-  setTimeout(function() {
+  document.getElementById('ai-text').textContent=gameState.players[p].name+' 分析中...';
+  setTimeout(function(){
     gameState.players[p].hand.push(gameState.wall.pop());
     sortHand(gameState.players[p].hand);
-    document.getElementById('remain').textContent = gameState.wall.length;
-    
+    document.getElementById('remain').textContent=gameState.wall.length;
     renderAll();
-    
-    setTimeout(function() {
-      var di = Math.floor(Math.random() * gameState.players[p].hand.length);
-      var dt = gameState.players[p].hand.splice(di, 1)[0];
+    setTimeout(function(){
+      var di=Math.floor(Math.random()*gameState.players[p].hand.length);
+      var dt=gameState.players[p].hand.splice(di,1)[0];
       gameState.players[p].discards.push(dt);
-      
-      animateDiscard(p, dt, gameState.players[p].discards.length - 1);
-      
-      gameState.currentTurn = (gameState.currentTurn + 1) % 4;
-      isAnimating = false;
-    }, 500);
-  }, 800);
+      animateDiscard(p,dt,gameState.players[p].discards.length-1);
+      gameState.currentTurn=(gameState.currentTurn+1)%4;
+      isAnimating=false;
+    },500);
+  },800);
 }
 
-function animateDiscard(p, tile, di) {
-  var tp = getHandPos(p, 0);
-  var dp = getDiscardPos(p, di);
-  
-  var tm = createTileMesh(tile, p);
-  tm.position.copy(tp);
-  tm.rotation.copy(getHandRot(p));
-  scene.add(tm);
-  
-  var start = Date.now(), dur = 500;
-  function loop() {
-    var e = Date.now() - start;
-    var t = Math.min(e / dur, 1);
-    var k = 1 - Math.pow(1 - t, 3);
-    tm.position.lerpVectors(tp, dp, k);
-    
-    if(t < 1) {
-      requestAnimationFrame(loop);
-    } else {
-      scene.remove(tm);
-      // Add to riverGroup - PERSISTENT
-      var finalTile = createTileMesh(tile, p);
-      finalTile.position.copy(dp);
-      finalTile.rotation.copy(getDiscardRot(p));
-      riverGroup.add(finalTile);
-      tileMeshes.discard[p].push(finalTile);
-    }
-  }
+function animateDiscard(p,tile,di){
+  var tp=getHandPos(p,0), dp=getDiscardPos(p,di);
+  var tm=createTile(tile,p);
+  tm.position.copy(tp); scene.add(tm);
+  var start=Date.now(), dur=500;
+  function loop(){ var e=Date.now()-start, t=Math.min(e/dur,1), k=1-Math.pow(1-t,3); tm.position.lerpVectors(tp,dp,k); if(t<1)requestAnimationFrame(loop);else{scene.remove(tm);var ft=createTile(tile,p);ft.position.copy(dp);riverGroup.add(ft);tileMeshes.discard[p].push(ft);}}
   loop();
 }
 
-function updateCurrentPlayerUI(p) {
-  for(var i = 0; i < 4; i++) {
-    document.getElementById('player-' + i).classList.toggle('active', i === p);
-  }
-  document.getElementById('thinking-player').textContent = ['東', '北', '西', '南'][p];
-}
+function updateCurrentPlayerUI(p){for(var i=0;i<4;i++)document.getElementById('player-'+i).classList.toggle('active',i===p);document.getElementById('thinking-player').textContent=['東','南','西','北'][p];}
 
-function startAutoPlay() {
-  if(autoPlayInterval) clearInterval(autoPlayInterval);
-  autoPlayInterval = setInterval(function() {
-    if(isAutoPlaying && !isAnimating) nextTurn();
-  }, 2500);
-}
+function startAutoPlay(){if(autoPlayInterval)clearInterval(autoPlayInterval);autoPlayInterval=setInterval(function(){if(isAutoPlaying&&!isAnimating)nextTurn();},2500);}
 
-function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-}
-
-window.addEventListener('resize', function() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-window.toggleAutoPlay = function() {
-  isAutoPlaying = !isAutoPlaying;
-  document.getElementById('autoplay-btn').textContent = isAutoPlaying ? '暫停' : '開始';
-};
+function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);}
+window.addEventListener('resize',function(){camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight);});
+window.toggleAutoPlay=function(){isAutoPlaying=!isAutoPlaying;document.getElementById('autoplay-btn').textContent=isAutoPlaying?'暫停':'開始';};
 
 init();
 </script>
