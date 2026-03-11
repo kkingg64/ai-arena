@@ -2,9 +2,9 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;">
+<link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" href="data:,">
-<link rel="icon" href="data:,">
 <title>AI Mahjong Arena</title>
 <style>
 body{margin:0;overflow:hidden;background:#050a0f;font-family:'Segoe UI',sans-serif}
@@ -190,12 +190,12 @@ isAnimating=true;
 const p=gameState.currentTurn;
 updateCurrentPlayerUI(p);
 document.getElementById('ai-text').textContent=gameState.players[p].name+' 分析中...';
-await sleep(800);
+await new Promise(r=>setTimeout(r,800));
 gameState.players[p].hand.push(gameState.wall.pop());
 gameState.players[p].hand.sort();
 document.getElementById('remain').textContent=gameState.wall.length;
 createAllTiles();
-await sleep(400);
+await new Promise(r=>setTimeout(r,400));
 const di=Math.floor(Math.random()*gameState.players[p].hand.length);
 const dt=gameState.players[p].hand.splice(di,1)[0];
 gameState.players[p].discards.push(dt);
@@ -210,12 +210,13 @@ const tp=getHandPosition(p,0),dp=getDiscardPosition(p,di),dr=getDiscardRotation(
 const tm=createTileMesh(tile,p);
 tm.position.copy(tp);tm.rotation.copy(tr);scene.add(tm);
 const start=Date.now(),dur=600,sp=tp.clone(),rp=tr.clone();
-return new Promise(r=>{
+return new Promise(resolve=>{
 function loop(){
 const e=Date.now()-start,t=Math.min(e/dur,1),k=1-Math.pow(1-t,3);
 tm.position.lerpVectors(sp,dp,k);tm.rotation.x=rp.x+(dr.x-rp.x)*k;tm.rotation.y=rp.y+(dr.y-rp.y)*k;tm.rotation.z=rp.z+(dr.z-rp.z)*k;
-if(t<1)requestAnimationFrame(loop);else{tileMeshes.discard[p].push(tm);r();}
-}loop();
+if(t<1)requestAnimationFrame(loop);else{tileMeshes.discard[p].push(tm);resolve();}
+}
+loop();
 });
 }
 
@@ -229,9 +230,16 @@ if(autoPlayInterval)clearInterval(autoPlayInterval);
 autoPlayInterval=setInterval(()=>{if(isAutoPlaying&&!isAnimating)nextTurn();},2000);
 }
 
-function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
-function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);}
-window.addEventListener('resize',()=>{camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight);});
+function animate(){
+if(renderer&&scene&&camera){
+requestAnimationFrame(animate);
+controls.update();
+renderer.render(scene,camera);
+}else{
+requestAnimationFrame(animate);
+}
+}
+window.addEventListener('resize',()=>{if(camera&&renderer){camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight);}});
 window.toggleAutoPlay=()=>{isAutoPlaying=!isAutoPlaying;document.getElementById('autoplay-btn').textContent=isAutoPlaying?'暫停':'開始';};
 init();
 </script>
