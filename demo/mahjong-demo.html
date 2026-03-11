@@ -98,6 +98,21 @@ var tileTextures = {};
 // Load tiles in background (optional)
 function loadTiles() {
   console.log('Loading tiles in background...');
+  
+  // Start game anyway after 5 seconds (fallback to canvas)
+  setTimeout(function() {
+    console.log('Tiles load timeout - using fallback');
+    if (typeof initGame === 'function' && !window.gameStarted) {
+      window.gameStarted = true;
+      initGame();
+      renderAll();
+      document.getElementById('loading').style.display = 'none';
+      console.log('Game started with fallback!');
+      animate();
+      startAutoPlay();
+    }
+  }, 5000);
+  
   var loaded = 0;
   for (var label in tileImageUrls) {
     (function(l) {
