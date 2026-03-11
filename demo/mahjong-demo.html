@@ -54,85 +54,132 @@ console.log('Starting Mahjong Arena...');
 
 var TILE_W = 0.28, TILE_H = 0.08, TILE_D = 0.4;
 
-
-// Use local tile images
+// Tile URLs
 var tileImageUrls = {
-  '1M': 'tiles/Man1.png',
-  '2M': 'tiles/Man2.png',
-  '3M': 'tiles/Man3.png',
-  '4M': 'tiles/Man4.png',
-  '5M': 'tiles/Man5.png',
-  '6M': 'tiles/Man6.png',
-  '7M': 'tiles/Man7.png',
-  '8M': 'tiles/Man8.png',
-  '9M': 'tiles/Man9.png',
-  '1D': 'tiles/Pin1.png',
-  '2D': 'tiles/Pin2.png',
-  '3D': 'tiles/Pin3.png',
-  '4D': 'tiles/Pin4.png',
-  '5D': 'tiles/Pin5.png',
-  '6D': 'tiles/Pin6.png',
-  '7D': 'tiles/Pin7.png',
-  '8D': 'tiles/Pin8.png',
-  '9D': 'tiles/Pin9.png',
-  '1S': 'tiles/Sou1.png',
-  '2S': 'tiles/Sou2.png',
-  '3S': 'tiles/Sou3.png',
-  '4S': 'tiles/Sou4.png',
-  '5S': 'tiles/Sou5.png',
-  '6S': 'tiles/Sou6.png',
-  '7S': 'tiles/Sou7.png',
-  '8S': 'tiles/Sou8.png',
-  '9S': 'tiles/Sou9.png',
-  'E': 'tiles/Ton.png',
-  'S_h': 'tiles/Nan.png',
-  'W': 'tiles/Ton.png',
-  'N': 'tiles/Pei.png',
-  'R': 'tiles/Chun.png',
-  'G': 'tiles/Hatsu.png',
-  'B': 'tiles/Haku.png',
+  '1M': 'tiles/Man1.png', '2M': 'tiles/Man2.png', '3M': 'tiles/Man3.png', '4M': 'tiles/Man4.png', '5M': 'tiles/Man5.png', '6M': 'tiles/Man6.png', '7M': 'tiles/Man7.png', '8M': 'tiles/Man8.png', '9M': 'tiles/Man9.png',
+  '1D': 'tiles/Pin1.png', '2D': 'tiles/Pin2.png', '3D': 'tiles/Pin3.png', '4D': 'tiles/Pin4.png', '5D': 'tiles/Pin5.png', '6D': 'tiles/Pin6.png', '7D': 'tiles/Pin7.png', '8D': 'tiles/Pin8.png', '9D': 'tiles/Pin9.png',
+  '1S': 'tiles/Sou1.png', '2S': 'tiles/Sou2.png', '3S': 'tiles/Sou3.png', '4S': 'tiles/Sou4.png', '5S': 'tiles/Sou5.png', '6S': 'tiles/Sou6.png', '7S': 'tiles/Sou7.png', '8S': 'tiles/Sou8.png', '9S': 'tiles/Sou9.png',
+  'E': 'tiles/Ton.png', 'S_h': 'tiles/Nan.png', 'W': 'tiles/Ton.png', 'N': 'tiles/Pei.png', 'R': 'tiles/Chun.png', 'G': 'tiles/Hatsu.png', 'B': 'tiles/Haku.png',
+};
+var tileTextures = {};
+function loadTileImages() { for (var l in tileImageUrls) { (function(label) { var img = new Image(); img.onload = function() { var c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img,0,0); var t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; tileTextures[label] = t; console.log('Loaded:',label); }; img.src = tileImageUrls[label]; })(l); } }
+var HAND_SPACING = 0.3;
+var DISCARD_W = 0.35;
+var DISCARD_D = 0.5;
+var DISCARD_OFFSET = 0.7;
+var DISCARD_Y = 0.1;
+
+var tileMeshes = {hand:[[],[],[],[]], discard:[[],[],[],[]]};
+var riverGroup;
+var isAnimating = false, autoPlayInterval = null, isAutoPlaying = true;
+var scene, camera, renderer, controls;
+
+var gameState = {
+  players: [
+    {name:"GPT-4o", hand:[], discards:[], seat:0, color:0xe74c3c},
+    {name:"Llama", hand:[], discards:[], seat:1, color:0x3498db},
+    {name:"Claude", hand:[], discards:[], seat:2, color:0x2ecc71},
+    {name:"Gemini", hand:[], discards:[], seat:3, color:0xf39c12}
+  ],
+  currentTurn: 0, wall:[], dealer:0, round:1, pool:0
 };
 
-// Tile loader
-var tileTextures = {};
-// Load tiles in background (optional)
-function loadTiles() {
-  console.log('Loading tiles in background...');
-  
-  // Start game anyway after 5 seconds (fallback to canvas)
-  setTimeout(function() {
-    console.log('Tiles load timeout - using fallback');
-    if (typeof initGame === 'function' && !window.gameStarted) {
-      window.gameStarted = true;
-      initGame();
-      renderAll();
-      document.getElementById('loading').style.display = 'none';
-      console.log('Game started with fallback!');
-      animate();
-      startAutoPlay();
-    }
-  }, 5000);
-  
-  var loaded = 0;
-  for (var label in tileImageUrls) {
-    (function(l) {
-      var img = new Image();
-      img.onload = function() {
-        var cvs = document.createElement('canvas');
-        cvs.width = img.width; cvs.height = img.height;
-        cvs.getContext('2d').drawImage(img,0,0);
-        var tex = new THREE.CanvasTexture(cvs);
-        tex.magFilter = THREE.NearestFilter;
-        tileTextures[l] = tex;
-        loaded++;
-        if(loaded === Object.keys(tileImageUrls).length) console.log('All tiles loaded!');
-      };
-      img.onerror = function(){ loaded++; };
-      img.src = tileImageUrls[l];
-    })(label);
-  }
+function sortHand(hand) {
+  var suitOrder = {'M': 1, 'D': 2, 'S': 3, 'F': 4, 'E': 5, 'S_h': 6, 'W': 7, 'N': 8, 'R': 9, 'G': 10, 'B': 11};
+  hand.sort(function(a, b) {
+    var suitA = a.replace(/[0-9]/g, ''), suitB = b.replace(/[0-9]/g, '');
+    var numA = parseInt(a.replace(/[^0-9]/g, '')) || 0;
+    var numB = parseInt(b.replace(/[^0-9]/g, '')) || 0;
+    var orderA = suitOrder[suitA] || 5, orderB = suitOrder[suitB] || 5;
+    if (orderA !== orderB) return orderA - orderB;
+    return numA - numB;
+  });
 }
 
+function createTileTexture(label) {
+  var canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  var ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 256, 256);
+  
+  var labelMap = {
+    'M1':'一萬','M2':'二萬','M3':'三萬','M4':'四萬','M5':'五萬','M6':'六萬','M7':'七萬','M8':'八萬','M9':'九萬',
+    'D1':'一筒','D2':'二筒','D3':'三筒','D4':'四筒','D5':'五筒','D6':'六筒','D7':'七筒','D8':'八筒','D9':'九筒',
+    'S1':'一索','S2':'二索','S3':'三索','S4':'四索','S5':'五索','S6':'六索','S7':'七索','S8':'八索','S9':'九索',
+    'E':'東','S_h':'南','W':'西','N':'北','R':'中','G':'發','B':'白',
+    'F1':'梅','F2':'蘭','F3':'菊','F4':'竹','F5':'春','F6':'夏','F7':'秋','F8':'冬'
+  };
+  var displayText = labelMap[label] || label;
+  
+  if (label.includes('M')) ctx.fillStyle = '#cc0000';
+  else if (label.includes('S')) ctx.fillStyle = '#008800';
+  else if (label.includes('D')) ctx.fillStyle = '#0000bb';
+  else ctx.fillStyle = '#333333';
+  
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 120px "Microsoft JhengHei", sans-serif';
+  ctx.fillText(displayText, 128, 128);
+  
+  var texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(1, 0.7);
+  texture.offset.set(0, 0.15);
+  return texture;
+}
+
+function createTile(label, playerIndex) {
+  var geometry = new THREE.BoxGeometry(TILE_W, TILE_H, TILE_D);
+  var texture = createTileTexture(label);
+  var faceMat = new THREE.MeshLambertMaterial({ map: texture });
+  var sideMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  var backMat = new THREE.MeshLambertMaterial({ color: 0x234d32 });
+  var materials = [sideMat, sideMat, faceMat, backMat, sideMat, sideMat];
+  var mesh = new THREE.Mesh(geometry, materials);
+  mesh.castShadow = true;
+  mesh.rotation.y = getMeshRotationY(playerIndex);
+  return mesh;
+}
+
+function getMeshRotationY(playerIndex) {
+  if (playerIndex === 0) return 0;
+  if (playerIndex === 1) return Math.PI / 2;
+  if (playerIndex === 2) return Math.PI;
+  return -Math.PI / 2;
+}
+
+function init() {
+  console.log('Initializing...');
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x050a0f);
+  camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 12, 10);
+  renderer = new THREE.WebGLRenderer({antialias: true});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.maxPolarAngle = Math.PI/2.2;
+  controls.target.set(0, 0, 0);
+  controls.update();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+  var dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+  dirLight.position.set(5, 15, 5);
+  scene.add(dirLight);
+  riverGroup = new THREE.Group();
+  scene.add(riverGroup);
+  createTable();
+  loadTileImages(); initGame(); renderAll(); document.getElementById("loading").style.display = "none"; console.log("Game started!"); animate(); startAutoPlay();
+  initGame();
+  renderAll();
+  document.getElementById('loading').style.display = 'none';
+  console.log("Ready! Players discards:", gameState.players.map(function(p){return p.discards.length}));
+  animate();
+  startAutoPlay();
+}
 
 function initGame() {
   var suits = ['M', 'D', 'S'];
@@ -228,6 +275,12 @@ function nextTurn() {
       var dt=gameState.players[p].hand.splice(di,1)[0];
       gameState.players[p].discards.push(dt);
       animateDiscard(p,dt,gameState.players[p].discards.length-1);
+      
+      // 自動檢查其他玩家既動作 (碰/槓/胡)
+      setTimeout(function() {
+        checkAutoActions(p, dt);
+      }, 600);
+      
       gameState.currentTurn=(gameState.currentTurn+1)%4;
       isAnimating=false;
     },500);
@@ -244,6 +297,325 @@ function animateDiscard(p,tile,di){
 }
 
 function updateCurrentPlayerUI(p){for(var i=0;i<4;i++)document.getElementById('player-'+i).classList.toggle('active',i===p);document.getElementById('thinking-player').textContent=['東','南','西','北'][p];}
+
+// ============================================================
+// PONG (碰) Action
+// ============================================================
+function ponAction() {
+  var currentPlayer = gameState.currentTurn;
+  var prevPlayer = (currentPlayer + 3) % 4; // 上家
+  var lastDiscard = gameState.players[prevPlayer].discards[gameState.players[prevPlayer].discards.length - 1];
+  
+  if (!lastDiscard) {
+    alert('沒有棄牌可以碰！');
+    return;
+  }
+  
+  // 檢查手牌有幾多張相同既牌
+  var count = 0;
+  for (var i = 0; i < gameState.players[currentPlayer].hand.length; i++) {
+    if (gameState.players[currentPlayer].hand[i] === lastDiscard) {
+      count++;
+    }
+  }
+  
+  if (count >= 2) {
+    // 可以碰！移除2張手牌 + 上家既棄牌
+    var removed = 0;
+    gameState.players[currentPlayer].hand = gameState.players[currentPlayer].hand.filter(function(tile) {
+      if (tile === lastDiscard && removed < 2) {
+        removed++;
+        return false;
+      }
+      return true;
+    });
+    
+    // 顯示明碰 (加入碰既牌組)
+    if (!gameState.players[currentPlayer].pon) gameState.players[currentPlayer].pon = [];
+    gameState.players[currentPlayer].pon.push([lastDiscard, lastDiscard, lastDiscard]);
+    
+    document.getElementById('ai-text').textContent = gameState.players[currentPlayer].name + ' 碰 ' + lastDiscard + '！';
+    renderAll();
+    alert('碰！食咗 ' + lastDiscard);
+  } else {
+    alert('手牌唔夠兩張可以碰！');
+  }
+}
+
+// ============================================================
+// KONG (槓) Action
+// ============================================================
+function kongAction() {
+  var currentPlayer = gameState.currentTurn;
+  var hand = gameState.players[currentPlayer].hand;
+  
+  // 檢查手牌有冇3張相同既牌
+  var tileCount = {};
+  for (var i = 0; i < hand.length; i++) {
+    var tile = hand[i];
+    if (!tileCount[tile]) tileCount[tile] = 0;
+    tileCount[tile]++;
+  }
+  
+  var canKong = null;
+  for (var tile in tileCount) {
+    if (tileCount[tile] >= 3) {
+      canKong = tile;
+      break;
+    }
+  }
+  
+  if (canKong) {
+    // 移除3張手牌，顯示明槓
+    var removed = 0;
+    gameState.players[currentPlayer].hand = hand.filter(function(tile) {
+      if (tile === canKong && removed < 3) {
+        removed++;
+        return false;
+      }
+      return true;
+    });
+    
+    // 顯示明槓
+    if (!gameState.players[currentPlayer].kong) gameState.players[currentPlayer].kong = [];
+    gameState.players[currentPlayer].kong.push([canKong, canKong, canKong, canKong]);
+    
+    document.getElementById('ai-text').textContent = gameState.players[currentPlayer].name + ' 槓 ' + canKong + '！';
+    renderAll();
+    alert('槓！開咗 ' + canKong);
+  } else {
+    alert('手牌冇三張相同既牌可以槓！');
+  }
+}
+
+// ============================================================
+// WIN (食糊) Action
+// ============================================================
+function winAction() {
+  var currentPlayer = gameState.currentTurn;
+  var hand = gameState.players[currentPlayer].hand;
+  
+  // 簡單既糊牌檢查：13張手牌 + 1張摸既牌 = 14張
+  // 檢查是否為 4面子 + 1對子
+  if (checkWin(hand)) {
+    document.getElementById('ai-text').textContent = '🎉 ' + gameState.players[currentPlayer].name + ' 食糊！！';
+    showWinAnimation(currentPlayer);
+    alert('恭喜！' + gameState.players[currentPlayer].name + ' 食糊！！！');
+  } else {
+    alert('手牌未夠糊！');
+  }
+}
+
+// 糊牌檢查函數
+function checkWin(hand) {
+  if (hand.length !== 14) return false;
+  
+  // 計數
+  var counts = {};
+  for (var i = 0; i < hand.length; i++) {
+    var tile = hand[i];
+    if (!counts[tile]) counts[tile] = 0;
+    counts[tile]++;
+  }
+  
+  var tiles = Object.keys(counts);
+  
+  // 嘗試配對所有可能既對子
+  for (var i = 0; i < tiles.length; i++) {
+    var pairTile = tiles[i];
+    if (counts[pairTile] >= 2) {
+      // 暫時移除一對
+      var testCounts = Object.assign({}, counts);
+      testCounts[pairTile] -= 2;
+      if (testCounts[pairTile] === 0) delete testCounts[pairTile];
+      
+      // 檢查其餘既牌可唔可以砌成4個面子
+      if (canFormMelds(testCounts)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// 檢查一堆牌可以唔可以砌成面子
+function canFormMelds(counts) {
+  var tiles = Object.keys(counts);
+  if (tiles.length === 0) return true;
+  
+  var firstTile = tiles[0];
+  var count = counts[firstTile];
+  
+  if (count === 0) {
+    delete counts[firstTile];
+    return canFormMelds(counts);
+  }
+  
+  // 試刻子 (3張相同)
+  if (count >= 3) {
+    var newCounts = Object.assign({}, counts);
+    newCounts[firstTile] -= 3;
+    if (newCounts[firstTile] === 0) delete newCounts[firstTile];
+    if (canFormMelds(newCounts)) return true;
+  }
+  
+  // 試順子 (同花色既連續3張)
+  // Parse tile: number + suit (e.g., "1M", "2D", "3S")
+  var num = parseInt(firstTile.replace(/[^0-9]/g, ''));
+  var suit = firstTile.replace(/[0-9]/g, '');
+  
+  // 只有 M, D, S 可以有順子
+  if (suit === 'M' || suit === 'D' || suit === 'S') {
+    var next1 = (num + 1) + suit;
+    var next2 = (num + 2) + suit;
+    
+    if (counts[next1] && counts[next2]) {
+      var newCounts = Object.assign({}, counts);
+      newCounts[firstTile]--;
+      newCounts[next1]--;
+      newCounts[next2]--;
+      if (newCounts[firstTile] === 0) delete newCounts[firstTile];
+      if (newCounts[next1] === 0) delete newCounts[next1];
+      if (newCounts[next2] === 0) delete newCounts[next2];
+      if (canFormMelds(newCounts)) return true;
+    }
+  }
+  
+  return false;
+}
+
+// 顯示糊牌動畫
+function showWinAnimation(playerIndex) {
+  var player = gameState.players[playerIndex];
+  
+  // 創建慶祝效果
+  for (var i = 0; i < 20; i++) {
+    setTimeout(function() {
+      var geometry = new THREE.SphereGeometry(0.1, 8, 8);
+      var material = new THREE.MeshBasicMaterial({color: Math.random() * 0xffffff});
+      var particle = new THREE.Mesh(geometry, material);
+      particle.position.set(
+        (Math.random() - 0.5) * 10,
+        5 + Math.random() * 3,
+        (Math.random() - 0.5) * 10
+      );
+      scene.add(particle);
+      
+      var startTime = Date.now();
+      function fall() {
+        var elapsed = Date.now() - startTime;
+        particle.position.y -= 0.05;
+        if (elapsed < 3000) {
+          requestAnimationFrame(fall);
+        } else {
+          scene.remove(particle);
+        }
+      }
+      fall();
+    }, i * 100);
+  }
+}
+
+// ============================================================
+// 自動判定其他玩家既動作 (碰/槓/胡)
+// ============================================================
+function checkAutoActions(discardPlayerIndex, discardedTile) {
+  var actions = [];
+  
+  // 檢查其他三個玩家
+  for (var p = 0; p < 4; p++) {
+    if (p === discardPlayerIndex) continue;
+    
+    var hand = gameState.players[p].hand;
+    var canPon = false, canKong = false, canWin = false;
+    
+    // 檢查碰：手牌有2張相同既棄牌
+    var sameCount = 0;
+    for (var i = 0; i < hand.length; i++) {
+      if (hand[i] === discardedTile) sameCount++;
+    }
+    if (sameCount >= 2) canPon = true;
+    
+    // 檢查槓：手牌有3張相同既牌
+    var tileCount = {};
+    for (var i = 0; i < hand.length; i++) {
+      var tile = hand[i];
+      if (!tileCount[tile]) tileCount[tile] = 0;
+      tileCount[tile]++;
+    }
+    for (var tile in tileCount) {
+      if (tileCount[tile] >= 3) {
+        canKong = true;
+        break;
+      }
+    }
+    
+    // 檢查胡：手牌 + 棄牌 = 糊牌
+    var testHand = hand.concat([discardedTile]);
+    if (checkWin(testHand)) canWin = true;
+    
+    if (canWin) {
+      actions.push({player: p, action: 'win', tile: discardedTile});
+    } else if (canKong) {
+      actions.push({player: p, action: 'kong', tile: discardedTile});
+    } else if (canPon) {
+      actions.push({player: p, action: 'pon', tile: discardedTile});
+    }
+  }
+  
+  // 按優先級排序：胡 > 槓 > 碰
+  actions.sort(function(a, b) {
+    var priority = {win: 3, kong: 2, pon: 1};
+    return priority[b.action] - priority[a.action];
+  });
+  
+  if (actions.length > 0) {
+    var bestAction = actions[0];
+    var playerName = gameState.players[bestAction.player].name;
+    var actionText = {win: '食糊', kong: '槓', pon: '碰'};
+    
+    document.getElementById('ai-text').textContent = playerName + ' 可以' + actionText[bestAction.action] + '！';
+    
+    // 自動執行動作
+    setTimeout(function() {
+      if (bestAction.action === 'pon') {
+        // 模擬其他玩家碰
+        var p = bestAction.player;
+        var tile = bestAction.tile;
+        var removed = 0;
+        gameState.players[p].hand = gameState.players[p].hand.filter(function(t) {
+          if (t === tile && removed < 2) {
+            removed++;
+            return false;
+          }
+          return true;
+        });
+        if (!gameState.players[p].pon) gameState.players[p].pon = [];
+        gameState.players[p].pon.push([tile, tile, tile]);
+        renderAll();
+        alert(playerName + ' 碰！');
+      } else if (bestAction.action === 'kong') {
+        var p = bestAction.player;
+        var tile = bestAction.tile;
+        var removed = 0;
+        gameState.players[p].hand = gameState.players[p].hand.filter(function(t) {
+          if (t === tile && removed < 3) {
+            removed++;
+            return false;
+          }
+          return true;
+        });
+        if (!gameState.players[p].kong) gameState.players[p].kong = [];
+        gameState.players[p].kong.push([tile, tile, tile, tile]);
+        renderAll();
+        alert(playerName + ' 槓！');
+      } else if (bestAction.action === 'win') {
+        showWinAnimation(bestAction.player);
+        alert('恭喜！' + playerName + ' 食糊！！！');
+      }
+    }, 1000);
+  }
+}
 
 function startAutoPlay(){if(autoPlayInterval)clearInterval(autoPlayInterval);autoPlayInterval=setInterval(function(){if(isAutoPlaying&&!isAnimating)nextTurn();},2500);}
 
