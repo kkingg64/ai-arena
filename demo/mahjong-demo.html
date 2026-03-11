@@ -1,473 +1,378 @@
 <!DOCTYPE html>
-<html lang="zh-HK">
+<html lang="zh-Hant">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🀄 AI Mahjong Arena - Standalone Demo</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body, #root { width: 100%; height: 100%; overflow: hidden; }
-        body { font-family: 'Noto Sans HK', sans-serif; background: #0a0a0f; }
-    </style>
-    <!-- React -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Three.js -->
-    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
-    <!-- React Three Fiber -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/react-three-fiber@6.0.13/dist/react-three-fiber.cjs.js"></script>
-    <script src="https://unpkg.com/@react-three/drei@9.92.7/dist/drei.cjs.js"></script>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>AI Mahjong Arena | MADHORSE Ltd.</title>
+ <style>
+ body { margin: 0; overflow: hidden; background: #050a0f; font-family: 'Segoe UI', sans-serif; }
+ canvas { display: block; }
+
+ .overlay { position: absolute; pointer-events: none; width: 100%; color: white; }
+ 
+ .top-bar { top: 0; height: 60px; background: rgba(10, 20, 30, 0.8); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: space-around; border-bottom: 1px solid rgba(255,255,255,0.1); pointer-events: auto; }
+ 
+ .action-bar { bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 15px; pointer-events: auto; }
+ .btn { padding: 10px 25px; background: #1a3a5c; border: 1px solid #3498db; color: #3498db; border-radius: 5px; cursor: pointer; transition: 0.3s; font-weight: bold; }
+ .btn:hover { background: #3498db; color: white; box-shadow: 0 0 15px #3498db; }
+ .btn.primary { background: #e74c3c; border-color: #ff7675; color: white; }
+
+ .thought-stream { position: absolute; left: 20px; bottom: 120px; width: 320px; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; border-left: 4px solid #3498db; font-size: 14px; line-height: 1.6; }
+ .thought-stream .player-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 5px; }
+ .thought-stream .player-0 { background: #e74c3c; }
+ .thought-stream .player-1 { background: #3498db; }
+ .thought-stream .player-2 { background: #2ecc71; }
+ .thought-stream .player-3 { background: #f39c12; }
+ 
+ .player-label { position: absolute; color: white; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.8); font-size: 16px; }
+ .player-label.top { top: 80px; left: 50%; transform: translateX(-50%); }
+ .player-label.bottom { bottom: 200px; left: 50%; transform: translateX(-50%); }
+ .player-label.left { left: 20px; top: 50%; transform: translateY(-50%); }
+ .player-label.right { right: 20px; top: 50%; transform: translateY(-50%); }
+ .player-label .ai-name { font-size: 12px; opacity: 0.8; }
+ .player-label.active { color: #f1c40f; text-shadow: 0 0 10px #f1c40f; }
+ 
+ #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #050a0f; display: flex; justify-content: center; align-items: center; z-index: 100; }
+ </style>
 </head>
 <body>
-    <div id="root"></div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo, useCallback } = React;
-        const { Canvas, useFrame, useThree } = ReactThreeFiber;
-        const { OrbitControls, Text, Html, Environment, ContactShadows, RoundedBox } = Drei;
+ <div id="loading">載入 3D 競技場中...</div>
 
-        // ============== TILE ASSETS GENERATION ==============
-        const SUITS = {
-            '萬': { folder: 'characters', color: '#1a5c1a' },
-            '筒': { folder: 'dots', color: '#1a1a5c' },
-            '索': { folder: 'bamboo', color: '#5c1a1a' },
-            '番子': { folder: 'winds', color: '#1a5c1a' },
-            '字': { folder: 'honors', color: '#1a5c1a' },
-        };
+ <div class="overlay top-bar">
+ <div>局數: <span id="round">1/8</span></div>
+ <div>本場: <span id="pool">0</span></div>
+ <div>剩餘牌: <span id="remain">70</span></div>
+ <div>莊家: <strong style="color:#f1c40f" id="dealer">東</strong></div>
+ <button class="btn" style="padding: 5px 10px" onclick="toggleAutoPlay()">⏯️ <span id="autoplay-btn">暫停</span></button>
+ </div>
 
-        // Generate canvas texture for a tile
-        function createTileTexture(suit, value) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 256;
-            canvas.height = 341;
-            const ctx = canvas.getContext('2d');
-            
-            // Ivory background
-            const gradient = ctx.createLinearGradient(0, 0, 256, 341);
-            gradient.addColorStop(0, '#faf6ef');
-            gradient.addColorStop(1, '#e8dfcf');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 256, 341);
-            
-            // Border
-            ctx.strokeStyle = '#c9b896';
-            ctx.lineWidth = 10;
-            ctx.strokeRect(5, 5, 246, 331);
-            
-            // Suit color
-            const suitInfo = SUITS[suit] || SUITS['萬'];
-            let color = suitInfo.color;
-            
-            // Red for special tiles
-            if (['3', '6', '9'].includes(value) || ['中', '發'].includes(value) || suit === '字') {
-                color = '#c41e3a';
-            }
-            
-            // Value in corner
-            ctx.fillStyle = color;
-            ctx.font = 'bold 36px "Noto Sans HK", sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText(value, 20, 50);
-            
-            // Suit character in center
-            ctx.font = 'bold 160px "Noto Sans HK", sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            let suitChar = suit;
-            if (suit === '番子') {
-                const windMap = { '東': '東', '南': '南', '西': '西', '北': '北' };
-                suitChar = windMap[value] || value;
-            }
-            if (suit === '字') {
-                const honorMap = { '中': '中', '發': '發', '白': '白' };
-                suitChar = honorMap[value] || value;
-            }
-            
-            ctx.fillText(suitChar, 128, 180);
-            
-            // Shine effect
-            const shine = ctx.createLinearGradient(0, 0, 0, 100);
-            shine.addColorStop(0, 'rgba(255,255,255,0.3)');
-            shine.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = shine;
-            ctx.fillRect(10, 10, 236, 100);
-            
-            return canvas.toDataURL();
-        }
+ <div class="player-label top" id="player-2">
+ <div>西</div>
+ <div class="ai-name" id="name-2">Claude</div>
+ </div>
+ <div class="player-label left" id="player-3">
+ <div>南</div>
+ <div class="ai-name" id="name-3">Gemini</div>
+ </div>
+ <div class="player-label right" id="player-1">
+ <div>北</div>
+ <div class="ai-name" id="name-1">Llama</div>
+ </div>
+ <div class="player-label bottom" id="player-0">
+ <div>東</div>
+ <div class="ai-name" id="name-0">GPT-4o</div>
+ </div>
 
-        // Pre-generate textures
-        const TILE_TEXTURES = {};
-        ['萬', '筒', '索', '番子', '字'].forEach(suit => {
-            const values = suit === '番子' ? ['東', '南', '西', '北'] : 
-                          suit === '字' ? ['中', '發', '白'] : 
-                          ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
-            values.forEach(value => {
-                const key = `${suit}_${value}`;
-                TILE_TEXTURES[key] = createTileTexture(suit, value);
-            });
-        });
+ <div class="thought-stream">
+ <div style="color: #3498db; margin-bottom: 5px;">🧠 <span id="thinking-player">東家</span> 思考中...</div>
+ <div id="ai-text">遊戲即將開始...</div>
+ </div>
 
-        // ============== GAME LOGIC ==============
-        const TILE_WIDTH = 0.3;
-        const TILE_HEIGHT = 0.4;
-        const TILE_DEPTH = 0.2;
+ <div class="overlay action-bar">
+ <button class="btn" onclick="skipAction()">過</button>
+ <button class="btn" onclick="ponAction()">碰</button>
+ <button class="btn" onclick="kongAction()">槓</button>
+ <button class="btn primary" onclick="winAction()">食糊!!</button>
+ <button class="btn" style="color:#95a5a6; border-color:#7f8c8d" onclick="discardTile()">棄牌</button>
+ </div>
 
-        // Generate 144 tiles
-        function generateTiles() {
-            const tiles = [];
-            const suits = [
-                { name: '萬', values: ['1','2','3','4','5','6','7','8','9'] },
-                { name: '筒', values: ['1','2','3','4','5','6','7','8','9'] },
-                { name: '索', values: ['1','2','3','4','5','6','7','8','9'] },
-                { name: '番子', values: ['東','南','西','北'] },
-                { name: '字', values: ['中','發','白'] },
-            ];
-            
-            suits.forEach(s => {
-                s.values.forEach(v => {
-                    for (let i = 0; i < 4; i++) {
-                        tiles.push({ suit: s.name, value: v, id: `${s.name}_${v}_${i}` });
-                    }
-                });
-            });
-            return tiles;
-        }
+ <script type="importmap">
+ {
+ "imports": {
+ "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+ "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+ }
+ }
+ </script>
 
-        // Shuffle
-        function shuffle(tiles) {
-            for (let i = tiles.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
-            }
-            return tiles;
-        }
+ <script type="module">
+ import * as THREE from 'three';
+ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // ============== MAHJONG TILE COMPONENT ==============
-        function MahjongTile({ suit, value, position = [0,0,0], rotation = [0,0,0], isFaceDown = false, isSelected = false, onClick, delay = 0 }) {
-            const meshRef = useRef();
-            const [hovered, setHovered] = useState(false);
-            const [animating, setAnimating] = useState(false);
-            const [currentPos, setCurrentPos] = useState(position);
-            
-            const texture = !isFaceDown && TILE_TEXTURES[`${suit}_${value}`];
-            const offset = isSelected ? 0.1 : 0;
-            
-            useEffect(() => {
-                if (delay > 0) {
-                    setTimeout(() => {
-                        setAnimating(true);
-                        setTimeout(() => setAnimating(false), 500);
-                    }, delay * 100);
-                }
-            }, [delay]);
-            
-            const targetY = position[1] + offset;
-            useFrame(() => {
-                if (meshRef.current) {
-                    meshRef.current.position.y += (targetY - meshRef.current.position.y) * 0.15;
-                }
-            });
-            
-            return (
-                <mesh
-                    ref={meshRef}
-                    position={position}
-                    rotation={rotation}
-                    onClick={onClick}
-                    onPointerOver={(e) => { e.stopPropagation(); setHovered(true); }}
-                    onPointerOut={() => setHovered(false)}
-                    castShadow
-                >
-                    <boxGeometry args={[TILE_WIDTH, TILE_HEIGHT, TILE_DEPTH]} />
-                    {/* Front face */}
-                    <meshStandardMaterial 
-                        map={!isFaceDown && texture ? new THREE.TextureLoader().load(texture) : null}
-                        color={isFaceDown ? '#1a3a5c' : '#f8f4eb'}
-                        roughness={0.4}
-                        metalness={0.05}
-                    />
-                    {/* Other faces - ivory */}
-                    <meshStandardMaterial color="#f0ebe0" roughness={0.5} />
-                    <meshStandardMaterial color="#f0ebe0" roughness={0.5} />
-                    <meshStandardMaterial color="#f8f4eb" roughness={0.35} />
-                    <meshStandardMaterial color="#e8e0d0" roughness={0.6} />
-                    {/* Front */}
-                    <meshStandardMaterial 
-                        map={!isFaceDown && texture ? new THREE.TextureLoader().load(texture) : null}
-                        color={isFaceDown ? '#1a3a5c' : '#f8f4eb'}
-                        roughness={0.4}
-                        metalness={0.05}
-                    />
-                    {/* Back */}
-                    <meshStandardMaterial color="#f8f4eb" roughness={0.4} />
-                    
-                    {/* Selection glow */}
-                    {isSelected && (
-                        <mesh position={[0, TILE_HEIGHT/2 + 0.01, 0]}>
-                            <planeGeometry args={[TILE_WIDTH * 0.9, TILE_HEIGHT * 0.9]} />
-                            <meshBasicMaterial color="#00d4ff" transparent opacity={0.4} />
-                        </mesh>
-                    )}
-                </mesh>
-            );
-        }
+ let scene, camera, renderer, controls;
+ const TILE_WIDTH = 0.3, TILE_HEIGHT = 0.4, TILE_DEPTH = 0.2;
+ const DISCARD_GAP = 0.06;
+ 
+ const tileMeshes = { hand: [[],[],[],[]], discard: [[],[],[],[]] };
+ let isAnimating = false;
+ let autoPlayInterval = null;
+ let isAutoPlaying = true;
 
-        // ============== DISCARD POSITION ==============
-        function getDiscardPosition(playerIndex, tileIndex) {
-            const row = Math.floor(tileIndex / 6);
-            const col = tileIndex % 6;
-            const dist = 1.3;
-            const sx = TILE_WIDTH + 0.01;
-            const sz = TILE_HEIGHT + 0.01;
-            
-            switch(playerIndex) {
-                case 0: return [[(col-2.5)*sx, 0.1, dist+row*sz], [0,0,0]];
-                case 1: return [[-dist-row*sz, 0.1, (col-2.5)*sx], [0,Math.PI/2,0]];
-                case 2: return [[-(col-2.5)*sx, 0.1, -dist-row*sz], [0,Math.PI,0]];
-                case 3: return [[dist+row*sz, 0.1, -(col-2.5)*sx], [0,-Math.PI/2,0]];
-            }
-        }
+ const gameState = {
+ players: [
+ { name: "GPT-4o", hand: [], discards: [], seat: 0, color: 0xe74c3c },
+ { name: "Llama", hand: [], discards: [], seat: 1, color: 0x3498db },
+ { name: "Claude", hand: [], discards: [], seat: 2, color: 0x2ecc71 },
+ { name: "Gemini", hand: [], discards: [], seat: 3, color: 0xf39c12 }
+ ],
+ currentTurn: 0,
+ wall: [],
+ dealer: 0,
+ round: 1,
+ pool: 0
+ };
 
-        // ============== HAND POSITION ==============
-        function getHandPosition(playerIndex, tileIndex) {
-            const dist = 3.0;
-            const spacing = TILE_WIDTH + 0.005;
-            const offset = (tileIndex - 6.5) * spacing;
-            const tilt = -0.25;
-            
-            switch(playerIndex) {
-                case 0: return [[offset, 0, dist], [tilt, 0, 0]];
-                case 1: return [[-dist, 0, offset], [tilt, Math.PI/2, 0]];
-                case 2: return [[-offset, 0, -dist], [tilt, Math.PI, 0]];
-                case 3: return [[dist, 0, -offset], [tilt, -Math.PI/2, 0]];
-            }
-        }
+ function createTileTexture(label) {
+ const canvas = document.createElement('canvas');
+ canvas.width = 128;
+ canvas.height = 170;
+ const ctx = canvas.getContext('2d');
+ ctx.fillStyle = '#f8f4eb';
+ ctx.fillRect(0, 0, 128, 170);
+ ctx.strokeStyle = '#c9b896';
+ ctx.lineWidth = 4;
+ ctx.strokeRect(2, 2, 124, 166);
+ ctx.fillStyle = '#1a1a2e';
+ ctx.font = 'bold 48px Arial';
+ ctx.textAlign = 'center';
+ ctx.textBaseline = 'middle';
+ ctx.fillText(label, 64, 85);
+ ctx.font = 'bold 16px Arial';
+ ctx.fillText(label, 16, 20);
+ ctx.fillText(label, 112, 150);
+ return new THREE.CanvasTexture(canvas);
+ }
 
-        // ============== MAIN SCENE ==============
-        function MahjongTableDemo() {
-            const [gameState, setGameState] = useState({
-                phase: 'idle',
-                wall: [],
-                hands: [[],[],[],[]],
-                discards: [[],[],[],[]],
-                scores: [25000, 25000, 25000, 25000],
-                currentPlayer: 0,
-                selectedTile: null,
-            });
+ function init() {
+ scene = new THREE.Scene();
+ scene.background = new THREE.Color(0x050a0f);
 
-            // Initialize game
-            useEffect(() => {
-                const tiles = shuffle(generateTiles());
-                const hands = [[],[],[],[]];
-                
-                // Deal 13 tiles each
-                for (let i = 0; i < 13; i++) {
-                    for (let p = 0; p < 4; p++) {
-                        hands[p].push(tiles.pop());
-                    }
-                }
-                
-                setGameState({
-                    phase: 'dealing',
-                    wall: tiles,
-                    hands,
-                    discards: [[],[],[],[]],
-                    scores: [25000, 25000, 25000, 25000],
-                    currentPlayer: 0,
-                    selectedTile: null,
-                });
-                
-                // After dealing animation, start game
-                setTimeout(() => {
-                    setGameState(s => ({ ...s, phase: 'playing' }));
-                }, 2500);
-            }, []);
+ // 上帝視角 - 俯瞰
+ camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+ camera.position.set(0, 10, 8);
+ camera.lookAt(0, 0, 0);
 
-            const handleTileClick = (playerIdx, tileIdx) => {
-                if (gameState.phase !== 'playing') return;
-                if (playerIdx !== gameState.currentPlayer) return;
-                
-                setGameState(s => ({
-                    ...s,
-                    selectedTile: { player: playerIdx, index: tileIdx }
-                }));
-            };
+ Renderer = new THREE.WebGLRenderer({ antialias: true });
+ renderer.setSize(window.innerWidth, window.innerHeight);
+ renderer.shadowMap.enabled = true;
+ document.body.appendChild(renderer.domElement);
 
-            const handleDiscard = () => {
-                if (!gameState.selectedTile) return;
-                const { player, index } = gameState.selectedTile;
-                const tile = gameState.hands[player][index];
-                
-                const newHands = gameState.hands.map((h, i) => 
-                    i === player ? h.filter((_, idx) => idx !== index) : [...h]
-                );
-                const newDiscards = gameState.discards.map((d, i) => 
-                    i === player ? [...d, tile] : [...d]
-                );
-                
-                setGameState(s => ({
-                    ...s,
-                    hands: newHands,
-                    discards: newDiscards,
-                    currentPlayer: (s.currentPlayer + 1) % 4,
-                    selectedTile: null,
-                }));
-            };
+ controls = new OrbitControls(camera, renderer.domElement);
+ controls.enableDamping = true;
+ controls.maxPolarAngle = Math.PI / 2.2;
+ controls.minDistance = 5;
+ controls.maxDistance = 25;
+ controls.target.set(0, 0, 0);
 
-            const directions = ['南', '西', '北', '東'];
-            const playerNames = ['GPT-4o', 'Claude', 'Gemini', 'Llama'];
+ const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+ scene.add(ambientLight);
+ const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+ directionalLight.position.set(5, 15, 5);
+ directionalLight.castShadow = true;
+ scene.add(directionalLight);
 
-            return (
-                <>
-                    {/* Lights */}
-                    <ambientLight intensity={0.5} />
-                    <spotLight position={[0, 15, 0]} angle={0.5} intensity={1.5} castShadow />
-                    <pointLight position={[5, 5, 5]} intensity={0.3} color="#4488ff" />
-                    <pointLight position={[-5, 5, -5]} intensity={0.3} color="#ff8844" />
-                    <Environment preset="night" />
+ createTable();
+ initGame();
+ createAllTiles();
 
-                    {/* Table */}
-                    <mesh rotation={[-Math.PI/2, 0, 0]} position={[0, -0.06, 0]} receiveShadow>
-                        <planeGeometry args={[10, 10]} />
-                        <meshStandardMaterial color="#0d1b2a" roughness={0.8} />
-                    </mesh>
+ document.getElementById('loading').style.display = 'none';
+ animate();
+ startAutoPlay();
+ }
 
-                    {/* Central Hub */}
-                    <group position={[0, 0.03, 0]}>
-                        <mesh rotation={[-Math.PI/2, 0, 0]}>
-                            <cylinderGeometry args={[1.4, 1.4, 0.06, 32]} />
-                            <meshPhysicalMaterial 
-                                color="#ffffff" transmission={0.85} thickness={0.5}
-                                roughness={0.1} transparent opacity={0.25}
-                            />
-                        </mesh>
-                        <Text position={[0, 0.04, 0]} rotation={[-Math.PI/2, 0, 0]} 
-                            fontSize={0.4} color="#ffd700">東 1 局</Text>
-                        <Text position={[0, 0.04, -0.5]} rotation={[-Math.PI/2, 0, 0]} 
-                            fontSize={0.15} color="#888">莊家：東</Text>
-                        
-                        {/* Scores */}
-                        {[0,1,2,3].map(i => {
-                            const a = (i * Math.PI) / 2;
-                            return (
-                                <group key={i} position={[Math.sin(a)*1.1, 0.04, Math.cos(a)*1.1]}>
-                                    <Text rotation={[-Math.PI/2, 0, 0]} fontSize={0.22} 
-                                        color={i===gameState.currentPlayer ? "#00d4ff" : "#fff"}>
-                                        {gameState.scores[i].toLocaleString()}
-                                    </Text>
-                                    <Text rotation={[-Math.PI/2, 0, 0]} position={[0, 0, 0.2]} 
-                                        fontSize={0.1} color="#666">{directions[i]}</Text>
-                                </group>
-                            );
-                        })}
-                    </group>
+ function initGame() {
+ const suits = ['S','D','W'];
+ const honors = ['E','S','W','N','R','G','W'];
+ let tiles = [];
+ for(let s of suits) { for(let n=1; n<=9; n++) { for(let i=0; i<4; i++) tiles.push(n + s); } }
+ for(let h of honors) { for(let i=0; i<4; i++) tiles.push(h); }
+ for(let i=1; i<=8; i++) tiles.push('F' + i);
+ for (let i = tiles.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [tiles[i], tiles[j]] = [tiles[j], tiles[i]]; }
+ 
+ gameState.wall = tiles;
+ for(let p=0; p<4; p++) { gameState.players[p].hand = []; for(let i=0; i<13; i++) { gameState.players[p].hand.push(tiles.pop()); } gameState.players[p].hand.sort(); }
+ document.getElementById('remain').textContent = tiles.length;
+ }
 
-                    {/* Discard Tiles */}
-                    {gameState.discards.map((pile, pIdx) => (
-                        pile.map((tile, tIdx) => {
-                            const [pos, rot] = getDiscardPosition(pIdx, tIdx);
-                            return (
-                                <MahjongTile key={`d${pIdx}-${tIdx}`}
-                                    suit={tile.suit} value={tile.value}
-                                    position={pos} rotation={rot} isFaceDown={true}
-                                    delay={tIdx * 0.05}
-                                />
-                            );
-                        })
-                    ))}
+ function createTable() {
+ const geometry = new THREE.CylinderGeometry(5, 5.2, 0.2, 64);
+ const material = new THREE.MeshStandardMaterial({ color: 0x0a141e, roughness: 0.2, metalness: 0.5 }); 
+ const table = new THREE.Mesh(geometry, material);
+ table.position.y = -0.11;
+ table.receiveShadow = true;
+ scene.add(table);
+ }
 
-                    {/* Player Hands */}
-                    {gameState.hands.map((hand, pIdx) => (
-                        hand.map((tile, tIdx) => {
-                            const [pos, rot] = getHandPosition(pIdx, tIdx);
-                            const isSelected = gameState.selectedTile?.player === pIdx && 
-                                             gameState.selectedTile?.index === tIdx;
-                            return (
-                                <MahjongTile key={`h${pIdx}-${tIdx}`}
-                                    suit={tile.suit} value={tile.value}
-                                    position={pos} rotation={rot}
-                                    isFaceDown={pIdx !== 0}
-                                    isSelected={isSelected}
-                                    onClick={() => handleTileClick(pIdx, tIdx)}
-                                    delay={0.1 + tIdx * 0.03}
-                                />
-                            );
-                        })
-                    ))}
+ function createTileMesh(label, playerIndex) {
+ const group = new THREE.Group();
+ let texture;
+ if (label) { texture = createTileTexture(label); } else {
+ const canvas = document.createElement('canvas');
+ canvas.width = 128; canvas.height = 170;
+ const ctx = canvas.getContext('2d');
+ ctx.fillStyle = '#1a3a5c'; ctx.fillRect(0, 0, 128, 170);
+ ctx.strokeStyle = '#2a4a6c'; ctx.lineWidth = 3; ctx.strokeRect(5, 5, 118, 160);
+ texture = new THREE.CanvasTexture(canvas); }
+ 
+ const faceMat = new THREE.MeshPhongMaterial({ map: texture });
+ if (playerIndex > 0) { faceMat.emissive = new THREE.Color(gameState.players[playerIndex].color); faceMat.emissiveIntensity = 0.15; }
+ const bodyMat = new THREE.MeshPhongMaterial({ color: 0xffffff });
+ const backMat = new THREE.MeshPhongMaterial({ map: texture });
+ const materials = [bodyMat, bodyMat, faceMat, bodyMat, bodyMat, backMat];
+ const mesh = new THREE.Mesh(new THREE.BoxGeometry(TILE_WIDTH, TILE_HEIGHT, TILE_DEPTH), materials);
+ mesh.castShadow = true;
+ group.add(mesh);
+ return group;
+ }
 
-                    {/* Player Labels */}
-                    {[
-                        [0, 0, 3.3, 0], [3.3, 0, 0, -Math.PI/2], 
-                        [0, 0, -3.3, Math.PI], [-3.3, 0, 0, Math.PI/2]
-                    ].map((pos, i) => (
-                        <Html key={i} position={pos} center>
-                            <div style={{
-                                background: 'rgba(0,0,0,0.7)',
-                                backdropFilter: 'blur(10px)',
-                                padding: '8px 14px',
-                                borderRadius: '12px',
-                                border: `2px solid ${i === gameState.currentPlayer ? '#00d4ff' : 'rgba(255,255,255,0.2)'}`,
-                                whiteSpace: 'nowrap',
-                                color: '#fff',
-                                textAlign: 'center',
-                            }}>
-                                <div style={{ fontWeight: 'bold', color: i === gameState.currentPlayer ? '#00d4ff' : '#fff' }}>
-                                    {playerNames[i]}
-                                </div>
-                                <div style={{ fontSize: '11px', color: '#888' }}>{directions[i]}</div>
-                            </div>
-                        </Html>
-                    ))}
+ // 上帝視角 - 所有牌面向觀察者
+ function getHandPosition(playerIndex, tileIndex) {
+ const spacing = TILE_WIDTH + 0.01;
+ const startOffset = -6 * spacing;
+ 
+ switch(playerIndex) {
+ case 0: // 東 (下方) - 水平排列
+ return new THREE.Vector3(startOffset + tileIndex * spacing, TILE_HEIGHT/2, 4.5);
+ case 1: // 北 (右邊) - 垂直排列
+ return new THREE.Vector3(5.0, TILE_HEIGHT/2 + tileIndex * spacing, 0);
+ case 2: // 西 (上方) - 水平排列
+ return new THREE.Vector3(-(startOffset + tileIndex * spacing), TILE_HEIGHT/2, -4.5);
+ case 3: // 南 (左邊) - 垂直排列
+ return new THREE.Vector3(-5.0, TILE_HEIGHT/2 + tileIndex * spacing, 0);
+ }
+ }
 
-                    {/* Discard Button */}
-                    {gameState.selectedTile && (
-                        <Html center position={[0, -3, 0]}>
-                            <button onClick={handleDiscard}
-                                style={{
-                                    background: '#ff4444',
-                                    color: '#fff',
-                                    border: 'none',
-                                    padding: '14px 36px',
-                                    borderRadius: '12px',
-                                    fontWeight: 'bold',
-                                    fontSize: '15px',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 4px 20px rgba(255,68,68,0.5)',
-                                }}>
-                                🀄 打出呢隻牌
-                            </button>
-                        </Html>
-                    )}
+ // 上帝視角 - 所有牌面向相機
+ function getHandRotation(playerIndex) {
+ switch(playerIndex) {
+ case 0: return new THREE.Euler(-0.25, 0, 0);   // 東 - 面向觀察者
+ case 1: return new THREE.Euler(0, -Math.PI/2, -0.25);  // 北 - 面向觀察者
+ case 2: return new THREE.Euler(0.25, Math.PI, 0);   // 西 - 面向觀察者
+ case 3: return new THREE.Euler(0, Math.PI/2, 0.25);  // 南 - 面向觀察者
+ }
+ }
 
-                    {/* Phase indicator */}
-                    <Html center position={[0, 4, 0]}>
-                        <div style={{
-                            background: 'rgba(0,0,0,0.6)',
-                            padding: '6px 16px',
-                            borderRadius: '20px',
-                            color: '#666',
-                            fontSize: '12px',
-                        }}>
-                            Phase: {gameState.phase} | Wall: {gameState.wall.length}
-                        </div>
-                    </Html>
+ function getDiscardPosition(playerIndex, tileIndex) {
+ const row = Math.floor(tileIndex / 6);
+ const col = tileIndex % 6;
+ const dist = 2.0; 
+ const sx = TILE_WIDTH + DISCARD_GAP;
+ const sz = TILE_HEIGHT + DISCARD_GAP;
+ 
+ switch(playerIndex) {
+ case 0: return new THREE.Vector3((col-2.5)*sx, 0.015, dist+row*sz);
+ case 1: return new THREE.Vector3(-dist-row*sz, 0.015, (col-2.5)*sx);
+ case 2: return new THREE.Vector3(-(col-2.5)*sx, 0.015, -dist-row*sz);
+ case 3: return new THREE.Vector3(dist+row*sz, 0.015, -(col-2.5)*sx);
+ }
+ }
 
-                    <ContactShadows position={[0, -0.05, 0]} opacity={0.4} scale={10} blur={2} />
-                    <OrbitControls enablePan={false} minDistance={5} maxDistance={15} />
-                </>
-            );
-        }
+ function getDiscardRotation(playerIndex) {
+ switch(playerIndex) {
+ case 0: return new THREE.Euler(Math.PI/2, 0, 0);
+ case 1: return new THREE.Euler(Math.PI/2, 0, Math.PI/2);
+ case 2: return new THREE.Euler(Math.PI/2, 0, Math.PI);
+ case 3: return new THREE.Euler(Math.PI/2, 0, -Math.PI/2);
+ }
+ }
 
-        // ============== RENDER ==============
-        ReactDOM.render(
-            <Canvas shadows camera={{ position: [0, 8, 10], fov: 50 }}>
-                <MahjongTableDemo />
-            </Canvas>,
-            document.getElementById('root')
-        );
-    </script>
+ function createAllTiles() {
+ for(let p=0; p<4; p++) { tileMeshes.hand[p].forEach(m => scene.remove(m)); tileMeshes.discard[p].forEach(m => scene.remove(m)); tileMeshes.hand[p] = []; tileMeshes.discard[p] = []; }
+ 
+ for(let p=0; p<4; p++) {
+ for(let i=0; i<gameState.players[p].hand.length; i++) {
+ const label = gameState.players[p].hand[i];
+ const tile = createTileMesh(label, p);
+ tile.position.copy(getHandPosition(p, i));
+ tile.rotation.copy(getHandRotation(p));
+ tile.userData = { player: p, index: i, type: 'hand' };
+ scene.add(tile);
+ tileMeshes.hand[p].push(tile);
+ }
+ }
+ }
+
+ async function nextTurn() {
+ if (isAnimating || gameState.wall.length === 0) return;
+ isAnimating = true;
+ const player = gameState.currentTurn;
+ const playerName = gameState.players[player].name;
+ 
+ updateCurrentPlayerUI(player);
+ const thoughts = [`${playerName} 分析手牌中...`, `${playerName} 考慮最佳出牌...`, `${playerName} 評估局勢...`, `${playerName} 計算胡牌機會...`, `${playerName} 觀察各對手...`];
+ document.getElementById('ai-text').textContent = thoughts[Math.floor(Math.random() * thoughts.length)];
+ 
+ await sleep(1000);
+ 
+ const drawnTile = gameState.wall.pop();
+ gameState.players[player].hand.push(drawnTile);
+ gameState.players[player].hand.sort();
+ document.getElementById('remain').textContent = gameState.wall.length;
+ createAllTiles();
+ await sleep(500);
+ 
+ const discardIndex = Math.floor(Math.random() * gameState.players[player].hand.length);
+ const discardedTile = gameState.players[player].hand.splice(discardIndex, 1)[0];
+ gameState.players[player].discards.push(discardedTile);
+ 
+ await animateDiscard(player, discardedTile, gameState.players[player].discards.length - 1);
+ createAllTiles();
+ gameState.currentTurn = (gameState.currentTurn + 1) % 4;
+ isAnimating = false;
+ }
+
+ async function animateDiscard(player, tile, discardIndex) {
+ const handPos = getHandPosition(player, 0);
+ const discardPos = getDiscardPosition(player, discardIndex);
+ const discardRot = getDiscardRotation(player);
+ const handRot = getHandRotation(player);
+ 
+ const tileMesh = createTileMesh(tile, player);
+ tileMesh.position.copy(handPos);
+ tileMesh.rotation.copy(handRot);
+ scene.add(tileMesh);
+ 
+ const duration = 800;
+ const startTime = Date.now();
+ const startPos = handPos.clone();
+ const startRot = handRot.clone();
+ const endPos = discardPos;
+ const endRot = discardRot;
+ 
+ return new Promise(resolve => {
+ function animate() {
+ const elapsed = Date.now() - startTime;
+ const t = Math.min(elapsed / duration, 1);
+ const easeT = 1 - Math.pow(1 - t, 3);
+ tileMesh.position.lerpVectors(startPos, endPos, easeT);
+ tileMesh.rotation.x = startRot.x + (endRot.x - startRot.x) * easeT;
+ tileMesh.rotation.y = startRot.y + (endRot.y - startRot.y) * easeT;
+ tileMesh.rotation.z = startRot.z + (endRot.z - startRot.z) * easeT;
+ if (t < 1) { requestAnimationFrame(animate); } else { tileMeshes.discard[player].push(tileMesh); resolve(); }
+ }
+ animate();
+ });
+ }
+
+ function updateCurrentPlayerUI(player) {
+ for(let i=0; i<4; i++) {
+ const label = document.getElementById('player-' + i);
+ if (i === player) { label.classList.add('active'); } else { label.classList.remove('active'); }
+ }
+ const directions = ['東', '北', '西', '南'];
+ document.getElementById('thinking-player').textContent = directions[player];
+ }
+
+ function startAutoPlay() {
+ if (autoPlayInterval) clearInterval(autoPlayInterval);
+ autoPlayInterval = setInterval(() => { if (isAutoPlaying && !isAnimating) { nextTurn(); } }, 2500);
+ }
+
+ function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+ function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+
+ window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+ window.toggleAutoPlay = function() { isAutoPlaying = !isAutoPlaying; document.getElementById('autoplay-btn').textContent = isAutoPlaying ? '暫停' : '開始'; };
+ window.skipAction = function() { console.log('Skip'); };
+ window.ponAction = function() { console.log('Pon'); };
+ window.kongAction = function() { console.log('Kong'); };
+ window.winAction = function() { console.log('Win'); };
+ window.discardTile = function() { if (gameState.currentTurn === 0 && !isAnimating) { nextTurn(); } };
+
+ init();
+ </script>
 </body>
 </html>

@@ -1,727 +1,488 @@
 <!DOCTYPE html>
-<html lang="zh-HK">
+<html lang="zh-Hant">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🀄 AI Mahjong Arena - Live Demo</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0f; }
-        #container { width: 100%; height: 100%; }
-        #info {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.7);
-            padding: 10px 20px;
-            border-radius: 25px;
-            color: #888;
-            font-family: 'Noto Sans HK', sans-serif;
-            font-size: 14px;
-            z-index: 100;
-        }
-        #gameStatus {
-            position: absolute;
-            top: 70px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,200,100,0.2);
-            border: 1px solid #00cc66;
-            padding: 8px 16px;
-            border-radius: 15px;
-            color: #00ff88;
-            font-family: 'Noto Sans HK', sans-serif;
-            font-size: 12px;
-            z-index: 100;
-            display: none;
-        }
-        #controls {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 10px;
-            z-index: 100;
-        }
-        .btn {
-            background: linear-gradient(135deg, #00d4ff, #0088aa);
-            color: #000;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 10px;
-            font-weight: bold;
-            cursor: pointer;
-            font-family: 'Noto Sans HK', sans-serif;
-        }
-        .btn:hover { transform: scale(1.05); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        #wsStatus {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-family: 'Noto Sans HK', sans-serif;
-            z-index: 100;
-        }
-        .ws-connected { background: #00cc66; color: #000; }
-        .ws-disconnected { background: #cc3300; color: #fff; }
-        .ws-connecting { background: #ffaa00; color: #000; }
-    </style>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;700;900&display=swap" rel="stylesheet">
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-        }
-    }
-    </script>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>AI Mahjong Arena | MADHORSE Ltd.</title>
+ <style>
+ body { margin: 0; overflow: hidden; background: #050a0f; font-family: 'Segoe UI', sans-serif; }
+ canvas { display: block; }
+
+ /* UI Overlays */
+ .overlay { position: absolute; pointer-events: none; width: 100%; color: white; }
+ 
+ .top-bar { top: 0; height: 60px; background: rgba(10, 20, 30, 0.8); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: space-around; border-bottom: 1px solid rgba(255,255,255,0.1); pointer-events: auto; }
+ 
+ .action-bar { bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 15px; pointer-events: auto; }
+ .btn { padding: 10px 25px; background: #1a3a5c; border: 1px solid #3498db; color: #3498db; border-radius: 5px; cursor: pointer; transition: 0.3s; font-weight: bold; }
+ .btn:hover { background: #3498db; color: white; box-shadow: 0 0 15px #3498db; }
+ .btn.primary { background: #e74c3c; border-color: #ff7675; color: white; }
+
+ .thought-stream { position: absolute; left: 20px; bottom: 120px; width: 320px; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; border-left: 4px solid #3498db; font-size: 14px; line-height: 1.6; }
+ .thought-stream .player-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 5px; }
+ .thought-stream .player-0 { background: #e74c3c; }
+ .thought-stream .player-1 { background: #3498db; }
+ .thought-stream .player-2 { background: #2ecc71; }
+ .thought-stream .player-3 { background: #f39c12; }
+ 
+ /* Player Labels */
+ .player-label { position: absolute; color: white; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.8); font-size: 16px; }
+ .player-label.top { top: 80px; left: 50%; transform: translateX(-50%); }
+ .player-label.bottom { bottom: 200px; left: 50%; transform: translateX(-50%); }
+ .player-label.left { left: 20px; top: 50%; transform: translateY(-50%); }
+ .player-label.right { right: 20px; top: 50%; transform: translateY(-50%); }
+ .player-label .ai-name { font-size: 12px; opacity: 0.8; }
+ .player-label.active { color: #f1c40f; text-shadow: 0 0 10px #f1c40f; }
+ 
+ #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #050a0f; display: flex; justify-content: center; align-items: center; z-index: 100; }
+ </style>
 </head>
 <body>
-    <div id="container"></div>
-    <div id="info">🀄 AI Mahjong Arena | Phase: Ready</div>
-    <div id="gameStatus"></div>
-    <div id="wsStatus" class="ws-disconnected">WebSocket: Disconnected</div>
-    <div id="controls">
-        <button class="btn" id="startBtn">🎮 開始遊戲</button>
-        <button class="btn" id="drawBtn" disabled>🎯 抽牌</button>
-        <button class="btn" id="discardBtn" disabled>🗑️ 打牌</button>
-        <button class="btn" id="resetBtn">🔄 重新開始</button>
-    </div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+ <div id="loading">載入 3D 競技場中...</div>
 
-        // ============== CONFIG ==============
-        const API_URL = 'http://76.13.215.13:8081';
-        const TILE_W = 0.3, TILE_H = 0.4, TILE_D = 0.2;
-        const TILE_GAP = 0.002;
-        const DISCARD_GAP = 0.005;
-        
-        // ============== GLOBALS ==============
-        let scene, camera, renderer, controls;
-        let tiles = [], handTiles = [], discardTiles = [], wallTiles = [];
-        let gameId = null;
-        let ws = null;
-        let currentPlayer = 0;
-        let myHand = [];
-        
-        const SUITS = { 
-            'W': {c:'#1a5c1a', n:'萬'}, 
-            'D': {c:'#1a1a5c', n:'筒'}, 
-            'S': {c:'#5c1a1a', n:'索'}, 
-            'Z': {c:'#1a5c1a', n:'字'},
-            'F': {c:'#2a5a2a', n:'花'},
-            'K': {c:'#5a2a5a', n:'季'}
-        };
+ <div class="overlay top-bar">
+ <div>局數: <span id="round">1/8</span></div>
+ <div>本場: <span id="pool">0</span></div>
+ <div>剩餘牌: <span id="remain">70</span></div>
+ <div>莊家: <strong style="color:#f1c40f" id="dealer">東</strong></div>
+ <button class="btn" style="padding: 5px 10px" onclick="toggleAutoPlay()">⏯️ <span id="autoplay-btn">暫停</span></button>
+ </div>
 
-        // ============== INIT ==============
-        function init() {
-            const container = document.getElementById('container');
-            
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0a0a0f);
-            scene.fog = new THREE.Fog(0x0a0a0f, 12, 35);
+ <div class="player-label top" id="player-2">
+ <div>西</div>
+ <div class="ai-name" id="name-2">Claude</div>
+ </div>
+ <div class="player-label left" id="player-3">
+ <div>南</div>
+ <div class="ai-name" id="name-3">Gemini</div>
+ </div>
+ <div class="player-label right" id="player-1">
+ <div>北</div>
+ <div class="ai-name" id="name-1">Llama</div>
+ </div>
+ <div class="player-label bottom" id="player-0">
+ <div>東</div>
+ <div class="ai-name" id="name-0">GPT-4o (你)</div>
+ </div>
 
-            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, 14, 16);
+ <div class="thought-stream">
+ <div style="color: #3498db; margin-bottom: 5px;">🧠 <span id="thinking-player">東家</span> 思考中...</div>
+ <div id="ai-text">遊戲即將開始，請稍候...</div>
+ </div>
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            container.appendChild(renderer.domElement);
+ <div class="overlay action-bar">
+ <button class="btn" onclick="skipAction()">過</button>
+ <button class="btn" onclick="ponAction()">碰</button>
+ <button class="btn" onclick="kongAction()">槓</button>
+ <button class="btn primary" onclick="winAction()">食糊!!</button>
+ <button class="btn" style="color:#95a5a6; border-color:#7f8c8d" onclick="discardTile()">棄牌</button>
+ </div>
 
-            controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-            controls.minDistance = 10;
-            controls.maxDistance = 28;
-            controls.maxPolarAngle = Math.PI / 2.05;
-            controls.target.set(0, 0, 0);
+ <script type="importmap">
+ {
+ "imports": {
+ "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+ "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+ }
+ }
+ </script>
 
-            // Lighting
-            const ambient = new THREE.AmbientLight(0xffffff, 0.65);
-            scene.add(ambient);
+ <script type="module">
+ import * as THREE from 'three';
+ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-            const spot = new THREE.SpotLight(0xffffff, 2.2);
-            spot.position.set(0, 22, 0);
-            spot.angle = 0.45;
-            spot.penumbra = 0.25;
-            spot.castShadow = true;
-            spot.shadow.mapSize.set(2048, 2048);
-            spot.shadow.bias = -0.0001;
-            scene.add(spot);
+ let scene, camera, renderer, controls;
+ const TILE_WIDTH = 0.3, TILE_HEIGHT = 0.4, TILE_DEPTH = 0.2, GAP = 0.005;
+ const DISCARD_GAP = 0.05;
+ 
+ // 牌堆
+ const TILES = [];
+ const tileMeshes = { hand: [[],[],[],[]], discard: [[],[],[],[]], wall: [] };
+ let isAnimating = false;
+ let autoPlayInterval = null;
+ let isAutoPlaying = true;
 
-            const blue = new THREE.PointLight(0x4488ff, 0.45);
-            blue.position.set(7, 7, 7);
-            scene.add(blue);
+ // 遊戲狀態
+ const gameState = {
+ players: [
+ { name: "GPT-4o", hand: [], discards: [], seat: 0 },
+ { name: "Llama", hand: [], discards: [], seat: 1 },
+ { name: "Claude", hand: [], discards: [], seat: 2 },
+ { name: "Gemini", hand: [], discards: [], seat: 3 }
+ ],
+ currentTurn: 0,
+ wall: [],
+ dealer: 0,
+ round: 1,
+ pool: 0
+ };
 
-            const orange = new THREE.PointLight(0xff8844, 0.45);
-            orange.position.set(-7, 7, -7);
-            scene.add(orange);
+ // 生成牌面紋理
+ function createTileTexture(label) {
+ const canvas = document.createElement('canvas');
+ canvas.width = 128;
+ canvas.height = 170;
+ const ctx = canvas.getContext('2d');
+ 
+ ctx.fillStyle = '#f8f4eb';
+ ctx.fillRect(0, 0, 128, 170);
+ ctx.strokeStyle = '#c9b896';
+ ctx.lineWidth = 4;
+ ctx.strokeRect(2, 2, 124, 166);
+ 
+ ctx.fillStyle = '#1a1a2e';
+ ctx.font = 'bold 48px Arial';
+ ctx.textAlign = 'center';
+ ctx.textBaseline = 'middle';
+ ctx.fillText(label, 64, 85);
+ 
+ ctx.font = 'bold 16px Arial';
+ ctx.fillText(label, 16, 20);
+ ctx.fillText(label, 112, 150);
+ 
+ return new THREE.CanvasTexture(canvas);
+ }
 
-            // Table
-            const tableGeo = new THREE.PlaneGeometry(16, 16);
-            const tableMat = new THREE.MeshStandardMaterial({ color: 0x0d1b2a, roughness: 0.7, metalness: 0.08 });
-            const table = new THREE.Mesh(tableGeo, tableMat);
-            table.rotation.x = -Math.PI / 2;
-            table.position.y = -0.12;
-            table.receiveShadow = true;
-            scene.add(table);
+ function init() {
+ scene = new THREE.Scene();
+ scene.background = new THREE.Color(0x050a0f);
 
-            // Shadow plane
-            const shadowMat = new THREE.ShadowMaterial({ opacity: 0.65 });
-            const shadow = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), shadowMat);
-            shadow.rotation.x = -Math.PI / 2;
-            shadow.position.y = -0.11;
-            shadow.receiveShadow = true;
-            scene.add(shadow);
+ camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+ camera.position.set(0, 8, 10);
 
-            createCentralHub();
-            createWall();
-            createDemoTiles();
+ renderer = new THREE.WebGLRenderer({ antialias: true });
+ renderer.setSize(window.innerWidth, window.innerHeight);
+ renderer.shadowMap.enabled = true;
+ document.body.appendChild(renderer.domElement);
 
-            window.addEventListener('resize', onResize);
-            animate();
+ controls = new OrbitControls(camera, renderer.domElement);
+ controls.enableDamping = true;
+ controls.maxPolarAngle = Math.PI / 2.1;
+ controls.minDistance = 5;
+ controls.maxDistance = 20;
 
-            document.getElementById('startBtn').addEventListener('click', startGame);
-            document.getElementById('drawBtn').addEventListener('click', drawTile);
-            document.getElementById('discardBtn').addEventListener('click', discardTile);
-            document.getElementById('resetBtn').addEventListener('click', resetGame);
-        }
+ const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+ scene.add(ambientLight);
+ const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+ directionalLight.position.set(5, 10, 5);
+ directionalLight.castShadow = true;
+ scene.add(directionalLight);
 
-        // ============== CENTRAL HUB ==============
-        function createCentralHub() {
-            const hubGeo = new THREE.CylinderGeometry(1.6, 1.6, 0.12, 32);
-            const hubMat = new THREE.MeshPhysicalMaterial({
-                color: 0xffffff,
-                transparent: true,
-                opacity: 0.18,
-                transmission: 0.88,
-                roughness: 0.03,
-                metalness: 0,
-                thickness: 0.6,
-            });
-            const hub = new THREE.Mesh(hubGeo, hubMat);
-            hub.position.y = 0.06;
-            scene.add(hub);
+ createTable();
+ initGame();
+ createAllTiles();
 
-            createText('東 1 局', 0, 0.14, 0, 0.6, 0xffd700);
-            createText('莊家：東', 0, 0.14, -0.8, 0.22, 0x888888);
+ document.getElementById('loading').style.display = 'none';
+ animate();
+ 
+ // 開始自動對戰
+ startAutoPlay();
+ }
 
-            const dirs = ['南', '西', '北', '東'];
-            const scores = [25000, 25000, 25000, 25000];
-            for (let i = 0; i < 4; i++) {
-                const angle = (i * Math.PI) / 2;
-                const x = Math.sin(angle) * 1.3;
-                const z = Math.cos(angle) * 1.3;
-                createText(scores[i].toLocaleString(), x, 0.14, z, 0.3, 0xffffff);
-                createText(dirs[i], x, 0.14, z + 0.3, 0.15, 0x666666);
-            }
-        }
+ function initGame() {
+ // 初始化牌牆 (144張)
+ const suits = ['S','D','W'];
+ const honors = ['E','S','W','N','R','G','W'];
+ const tiles = [];
+ 
+ // 萬子索子筒子
+ for(let s of suits) {
+ for(let n=1; n<=9; n++) {
+ for(let i=0; i<4; i++) tiles.push(n + s);
+ }
+ }
+ // 字牌
+ for(let h of honors) {
+ for(let i=0; i<4; i++) tiles.push(h);
+ }
+ // 花牌
+ for(let i=1; i<=8; i++) {
+ tiles.push('F' + i);
+ }
+ 
+ // 洗牌
+ for (let i = tiles.length - 1; i > 0; i--) {
+ const j = Math.floor(Math.random() * (i + 1));
+ [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+ }
+ 
+ gameState.wall = tiles;
+ 
+ // 發牌
+ for(let p=0; p<4; p++) {
+ gameState.players[p].hand = [];
+ for(let i=0; i<13; i++) {
+ gameState.players[p].hand.push(tiles.pop());
+ }
+ // 排序手牌
+ gameState.players[p].hand.sort();
+ }
+ 
+ // 更新 UI
+ document.getElementById('remain').textContent = tiles.length;
+ }
 
-        function createText(text, x, y, z, size, color) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#00000000';
-            ctx.fillRect(0, 0, 512, 128);
-            ctx.font = `900 ${size * 100}px "Noto Sans HK", sans-serif`;
-            ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(text, 256, 64);
+ function createTable() {
+ const geometry = new THREE.CylinderGeometry(5, 5.2, 0.2, 64);
+ const material = new THREE.MeshStandardMaterial({ color: 0x0a141e, roughness: 0.2, metalness: 0.5 }); 
+ const table = new THREE.Mesh(geometry, material);
+ table.position.y = -0.11;
+ table.receiveShadow = true;
+ scene.add(table);
+ }
 
-            const tex = new THREE.CanvasTexture(canvas);
-            const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
-            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size * 3.8, size * 0.95), mat);
-            mesh.position.set(x, y, z);
-            mesh.rotation.x = -Math.PI / 2;
-            scene.add(mesh);
-            return mesh;
-        }
+ function createTileMesh(label, isFaceUp) {
+ const group = new THREE.Group();
+ 
+ let texture;
+ if (isFaceUp && label) {
+ texture = createTileTexture(label);
+ } else {
+ // 蓋牌 - 藍色背面
+ const canvas = document.createElement('canvas');
+ canvas.width = 128;
+ canvas.height = 170;
+ const ctx = canvas.getContext('2d');
+ ctx.fillStyle = '#1a3a5c';
+ ctx.fillRect(0, 0, 128, 170);
+ ctx.strokeStyle = '#2a4a6c';
+ ctx.lineWidth = 3;
+ ctx.strokeRect(5, 5, 118, 160);
+ texture = new THREE.CanvasTexture(canvas);
+ }
+ 
+ const faceMat = new THREE.MeshPhongMaterial({ map: texture });
+ const bodyMat = new THREE.MeshPhongMaterial({ color: 0xffffff });
+ const backMat = new THREE.MeshPhongMaterial({ map: texture });
+ 
+ const materials = [bodyMat, bodyMat, faceMat, bodyMat, bodyMat, backMat];
+ const mesh = new THREE.Mesh(new THREE.BoxGeometry(TILE_WIDTH, TILE_HEIGHT, TILE_DEPTH), materials);
+ mesh.castShadow = true;
+ group.add(mesh);
+ 
+ return group;
+ }
 
-        // ============== WALL ==============
-        function createWall() {
-            wallTiles.forEach(w => scene.remove(w));
-            wallTiles = [];
+ function getHandPosition(playerIndex, tileIndex) {
+ const spacing = TILE_WIDTH + 0.008;
+ const totalWidth = 13 * spacing;
+ const startX = -totalWidth / 2 + spacing / 2;
+ 
+ switch(playerIndex) {
+ case 0: // 下方 (自己) - 朝向觀眾
+ return new THREE.Vector3(startX + tileIndex * spacing, TILE_HEIGHT/2, 4);
+ case 1: // 右邊
+ return new THREE.Vector3(4.5, TILE_HEIGHT/2, startX + tileIndex * spacing);
+ case 2: // 上方
+ return new THREE.Vector3(-(startX + tileIndex * spacing), TILE_HEIGHT/2, -4.5);
+ case 3: // 左邊
+ return new THREE.Vector3(-4.5, TILE_HEIGHT/2, -(startX + tileIndex * spacing));
+ }
+ }
 
-            const wallDist = 4.8;
-            const cols = 18;
-            const layerGap = TILE_D + 0.01;
+ function getHandRotation(playerIndex) {
+ switch(playerIndex) {
+ case 0: return new THREE.Euler(-0.2, 0, 0);
+ case 1: return new THREE.Euler(0, 0, -0.2);
+ case 2: return new THREE.Euler(0.2, Math.PI, 0);
+ case 3: return new THREE.Euler(0, 0, 0.2);
+ }
+ }
 
-            for (let layer = 0; layer < 2; layer++) {
-                // Top
-                for (let i = 0; i < cols; i++) {
-                    const x = (i - cols/2 + 0.5) * TILE_W;
-                    const z = -wallDist - layer * layerGap;
-                    createWallTile(x, z);
-                }
-                // Bottom
-                for (let i = 0; i < cols; i++) {
-                    const x = (i - cols/2 + 0.5) * TILE_W;
-                    const z = wallDist + layer * layerGap;
-                    createWallTile(x, z);
-                }
-                // Left
-                for (let i = 0; i < 6; i++) {
-                    const x = -wallDist - layer * layerGap;
-                    const z = (i - 3) * TILE_H;
-                    createWallTile(x, z);
-                }
-                // Right
-                for (let i = 0; i < 6; i++) {
-                    const x = wallDist + layer * layerGap;
-                    const z = (i - 3) * TILE_H;
-                    createWallTile(x, z);
-                }
-            }
-        }
+ function getDiscardPosition(playerIndex, tileIndex) {
+ const row = Math.floor(tileIndex / 6);
+ const col = tileIndex % 6;
+ const dist = 1.8; 
+ const sx = TILE_WIDTH + DISCARD_GAP;
+ const sz = TILE_HEIGHT + DISCARD_GAP;
+ 
+ switch(playerIndex) {
+ case 0: return new THREE.Vector3((col-2.5)*sx, 0.015, dist+row*sz);
+ case 1: return new THREE.Vector3(-dist-row*sz, 0.015, (col-2.5)*sx);
+ case 2: return new THREE.Vector3(-(col-2.5)*sx, 0.015, -dist-row*sz);
+ case 3: return new THREE.Vector3(dist+row*sz, 0.015, -(col-2.5)*sx);
+ }
+ }
 
-        function createWallTile(x, z) {
-            const geo = new THREE.BoxGeometry(TILE_W, TILE_H, TILE_D);
-            const mat = new THREE.MeshStandardMaterial({ color: 0x1a3a5c, roughness: 0.28, metalness: 0.08 });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(x, TILE_H/2, z);
-            mesh.castShadow = true;
-            scene.add(mesh);
-            wallTiles.push(mesh);
-        }
+ function getDiscardRotation(playerIndex) {
+ switch(playerIndex) {
+ case 0: return new THREE.Euler(Math.PI/2, 0, 0);
+ case 1: return new THREE.Euler(Math.PI/2, 0, Math.PI/2);
+ case 2: return new THREE.Euler(Math.PI/2, 0, Math.PI);
+ case 3: return new THREE.Euler(Math.PI/2, 0, -Math.PI/2);
+ }
+ }
 
-        // ============== TILE TEXTURE ==============
-        function createTileTexture(tileId) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 256;
-            canvas.height = 341;
-            const ctx = canvas.getContext('2d');
+ function createAllTiles() {
+ // 清除舊牌
+ for(let p=0; p<4; p++) {
+ tileMeshes.hand[p].forEach(m => scene.remove(m));
+ tileMeshes.discard[p].forEach(m => scene.remove(m));
+ tileMeshes.hand[p] = [];
+ tileMeshes.discard[p] = [];
+ }
+ 
+ // 創建手牌
+ for(let p=0; p<4; p++) {
+ for(let i=0; i<gameState.players[p].hand.length; i++) {
+ const label = gameState.players[p].hand[i];
+ // 只有玩家0可以看到自己的牌，其他人都是蓋牌
+ const isFaceUp = (p === 0);
+ const tile = createTileMesh(label, isFaceUp);
+ tile.position.copy(getHandPosition(p, i));
+ tile.rotation.copy(getHandRotation(p));
+ tile.userData = { player: p, index: i, type: 'hand' };
+ scene.add(tile);
+ tileMeshes.hand[p].push(tile);
+ }
+ }
+ }
 
-            // Parse tile ID (e.g., "1W", "5D", "1Z")
-            const value = tileId.charAt(0);
-            const suit = tileId.charAt(1);
-            
-            // Gradient background
-            const grad = ctx.createLinearGradient(0, 0, 256, 341);
-            grad.addColorStop(0, '#faf6ef');
-            grad.addColorStop(1, '#e8dfcf');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, 256, 341);
+ async function nextTurn() {
+ if (isAnimating || gameState.wall.length === 0) return;
+ 
+ isAnimating = true;
+ const player = gameState.currentTurn;
+ const playerName = gameState.players[player].name;
+ 
+ // 更新 UI - 顯示當前玩家
+ updateCurrentPlayerUI(player);
+ 
+ // 思考中
+ const thoughts = [
+ `${playerName} 正在分析手牌局勢...`,
+ `${playerName} 評估各張牌的價值...`,
+ `${playerName} 考慮是否碰牌或槓牌...`,
+ `${playerName} 計算胡牌機會...`,
+ `${playerName} 觀察場上局勢...`
+ ];
+ document.getElementById('ai-text').textContent = thoughts[Math.floor(Math.random() * thoughts.length)];
+ 
+ await sleep(800);
+ 
+ // 摸牌
+ const drawnTile = gameState.wall.pop();
+ gameState.players[player].hand.push(drawnTile);
+ gameState.players[player].hand.sort();
+ 
+ // 更新 UI
+ document.getElementById('remain').textContent = gameState.wall.length;
+ 
+ // 重新渲染手牌
+ createAllTiles();
+ await sleep(500);
+ 
+ // 打牌 (AI 隨機選擇)
+ const discardIndex = Math.floor(Math.random() * gameState.players[player].hand.length);
+ const discardedTile = gameState.players[player].hand.splice(discardIndex, 1)[0];
+ gameState.players[player].discards.push(discardedTile);
+ 
+ // 動畫：從手牌移到棄牌區
+ await animateDiscard(player, discardedTile, gameState.players[player].discards.length - 1);
+ 
+ // 重新渲染
+ createAllTiles();
+ 
+ // 輪到下一家
+ gameState.currentTurn = (gameState.currentTurn + 1) % 4;
+ isAnimating = false;
+ }
 
-            // Border
-            ctx.strokeStyle = '#c9b896';
-            ctx.lineWidth = 9;
-            ctx.strokeRect(5, 5, 246, 331);
+ async function animateDiscard(player, tile, discardIndex) {
+ const handPos = getHandPosition(player, 0); // 簡化：從手牌區域開始
+ const discardPos = getDiscardPosition(player, discardIndex);
+ const discardRot = getDiscardRotation(player);
+ 
+ // 創建打出的牌 (翻轉顯示)
+ const tileMesh = createTileMesh(tile, true);
+ tileMesh.position.copy(handPos);
+ tileMesh.rotation.copy(getHandRotation(player));
+ scene.add(tileMesh);
+ 
+ // 平滑動畫
+ const duration = 600;
+ const startTime = Date.now();
+ const startPos = handPos.clone();
+ const startRot = getHandRotation(player).clone();
+ 
+ return new Promise(resolve => {
+ function animate() {
+ const elapsed = Date.now() - startTime;
+ const t = Math.min(elapsed / duration, 1);
+ const easeT = 1 - Math.pow(1 - t, 3); // ease-out
+ 
+ tileMesh.position.lerpVectors(startPos, discardPos, easeT);
+ tileMesh.rotation.x = startRot.x + (discardRot.x - startRot.x) * easeT;
+ tileMesh.rotation.y = startRot.y + (discardRot.y - startRot.y) * easeT;
+ tileMesh.rotation.z = startRot.z + (discardRot.z - startRot.z) * easeT;
+ 
+ if (t < 1) {
+ requestAnimationFrame(animate);
+ } else {
+ tileMeshes.discard[player].push(tileMesh);
+ resolve();
+ }
+ }
+ animate();
+ });
+ }
 
-            // Color
-            let color = SUITS[suit]?.c || '#1a1a1a';
-            if (['3','6','9'].includes(value) || ['中','發','5Z','1Z','2Z','3Z','4Z','6Z','7Z'].includes(tileId)) color = '#b01830';
+ function updateCurrentPlayerUI(player) {
+ for(let i=0; i<4; i++) {
+ const label = document.getElementById('player-' + i);
+ if (i === player) {
+ label.classList.add('active');
+ } else {
+ label.classList.remove('active');
+ }
+ }
+ 
+ const directions = ['東', '北', '西', '南'];
+ document.getElementById('thinking-player').textContent = directions[player];
+ }
 
-            // Corner number
-            ctx.fillStyle = color;
-            ctx.font = 'bold 28px "Noto Sans HK"';
-            ctx.textAlign = 'left';
-            ctx.fillText(value, 15, 38);
+ function startAutoPlay() {
+ if (autoPlayInterval) clearInterval(autoPlayInterval);
+ autoPlayInterval = setInterval(() => {
+ if (isAutoPlaying && !isAnimating) {
+ nextTurn();
+ }
+ }, 2000);
+ }
 
-            // Center character
-            ctx.font = 'bold 135px "Noto Sans HK"';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            let suitChar = SUITS[suit]?.n || suit;
-            ctx.fillText(suitChar, 128, 175);
+ function sleep(ms) {
+ return new Promise(resolve => setTimeout(resolve, ms));
+ }
 
-            // Shine
-            const shine = ctx.createLinearGradient(0, 0, 0, 80);
-            shine.addColorStop(0, 'rgba(255,255,255,0.22)');
-            shine.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = shine;
-            ctx.fillRect(6, 6, 244, 75);
+ function animate() {
+ requestAnimationFrame(animate);
+ controls.update();
+ renderer.render(scene, camera);
+ }
 
-            return new THREE.CanvasTexture(canvas);
-        }
+ window.addEventListener('resize', () => {
+ camera.aspect = window.innerWidth / window.innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(window.innerWidth, window.innerHeight);
+ });
 
-        // ============== CREATE TILE ==============
-        function createTile(tileId, x, y, z, rotX = 0, rotY = 0, rotZ = 0, faceDown = false) {
-            const group = new THREE.Group();
-            group.position.set(x, y, z);
-            group.rotation.set(rotX, rotY, rotZ);
+ // 暴露全域函數
+ window.toggleAutoPlay = function() {
+ isAutoPlaying = !isAutoPlaying;
+ document.getElementById('autoplay-btn').textContent = isAutoPlaying ? '暫停' : '開始';
+ };
+ window.skipAction = function() { console.log('Skip'); };
+ window.ponAction = function() { console.log('Pon'); };
+ window.kongAction = function() { console.log('Kong'); };
+ window.winAction = function() { console.log('Win'); };
+ window.discardTile = function() { 
+ if (gameState.currentTurn === 0 && !isAnimating) {
+ nextTurn();
+ }
+ };
 
-            const geo = new THREE.BoxGeometry(TILE_W, TILE_H, TILE_D);
-            
-            const value = tileId ? tileId.charAt(0) : '?';
-            const suit = tileId ? tileId.charAt(1) : '?';
-            
-            const frontMat = faceDown 
-                ? new THREE.MeshStandardMaterial({ color: 0x1a3a5c, roughness: 0.28, metalness: 0.08 })
-                : new THREE.MeshStandardMaterial({ map: createTileTexture(tileId), roughness: 0.32, metalness: 0.02 });
-            
-            const sideMat = new THREE.MeshStandardMaterial({ color: 0xf0ebe0, roughness: 0.42, metalness: 0.02 });
-            
-            const materials = [sideMat, sideMat, sideMat, sideMat, frontMat, new THREE.MeshStandardMaterial({ color: 0xf8f4eb, roughness: 0.32 })];
-
-            const mesh = new THREE.Mesh(geo, materials);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            group.add(mesh);
-
-            // Edge
-            const edges = new THREE.EdgesGeometry(geo);
-            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.12, transparent: true }));
-            group.add(line);
-
-            group.userData = { tileId, faceDown };
-            scene.add(group);
-            return group;
-        }
-
-        // ============== DEMO ==============
-        function createDemoTiles() {
-            clearAllTiles();
-
-            const demoHands = [
-                ['1W','2W','3W','4W','5W','6W','7W','8W','9W','1D','2D','3D','4D','5D'],
-                ['1S','2S','3S','4S','5S','6S','7S','8S','9S','1Z','2Z','3Z','4Z','5Z'],
-                ['1W','1W','1D','1D','1S','1S','2Z','2Z','3Z','3Z','4Z','4Z','5Z','5Z'],
-                ['6W','6W','7W','7W','8W','8W','9W','9W','6D','6D','7D','7D','8D','8D'],
-            ];
-
-            demoHands.forEach((hand, pIdx) => {
-                hand.forEach((tileId, tIdx) => {
-                    const [pos, rot] = getHandPos(pIdx, tIdx);
-                    const tile = createTile(tileId, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2], pIdx !== 0);
-                    handTiles.push(tile);
-                });
-            });
-
-            // Labels
-            const labels = ['Player 0', 'Player 1', 'Player 2', 'Player 3'];
-            const dirs = ['南', '西', '北', '東'];
-            const posList = [[0, 1, 4.2], [4.2, 1, 0], [0, 1, -4.2], [-4.2, 1, 0]];
-            posList.forEach((pos, i) => createText(labels[i] + ' ' + dirs[i], pos[0], pos[1], pos[2], 0.38, 0xffffff));
-        }
-
-        function clearAllTiles() {
-            tiles.forEach(t => scene.remove(t));
-            handTiles.forEach(t => scene.remove(t));
-            discardTiles.forEach(t => scene.remove(t));
-            tiles = []; handTiles = []; discardTiles = [];
-        }
-
-        // ============== HAND POS ==============
-        function getHandPos(pIdx, tIdx) {
-            const dist = 3.8;
-            const spacing = TILE_W + TILE_GAP;
-            const offset = (tIdx - 6.5) * spacing;
-            const tilt = -0.26;
-            
-            switch(pIdx) {
-                case 0: return [[offset, TILE_H/2 + 0.001, dist], [tilt, 0, 0]];
-                case 1: return [[-dist, TILE_H/2 + 0.001, offset], [tilt, Math.PI/2, 0]];
-                case 2: return [[-offset, TILE_H/2 + 0.001, -dist], [tilt, Math.PI, 0]];
-                case 3: return [[dist, TILE_H/2 + 0.001, -offset], [tilt, -Math.PI/2, 0]];
-            }
-        }
-
-        function getDiscardPos(pIdx, tIdx) {
-            const row = Math.floor(tIdx / 6);
-            const col = tIdx % 6;
-            const dist = 1.8;
-            const gap = DISCARD_GAP;
-            const sx = TILE_W + gap;
-            const sz = TILE_D + gap;
-            const y = TILE_D/2 + 0.002;
-            
-            switch(pIdx) {
-                case 0: return [[(col - 2.5) * sx, y, dist + row * sz], [-Math.PI/2, 0, 0]];
-                case 1: return [[-dist - row * sz, y, (col - 2.5) * sx], [-Math.PI/2, Math.PI/2, 0]];
-                case 2: return [[-(col - 2.5) * sx, y, -dist - row * sz], [-Math.PI/2, Math.PI, 0]];
-                case 3: return [[dist + row * sz, y, -(col - 2.5) * sx], [-Math.PI/2, -Math.PI/2, 0]];
-            }
-        }
-
-        // ============== GAME LOGIC ==============
-        async function startGame() {
-            try {
-                updateStatus('正在創建遊戲...', 'connecting');
-                
-                // Create game via API
-                const response = await fetch(`${API_URL}/api/games?debug=true`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ players: [] })
-                });
-                
-                if (!response.ok) throw new Error('Failed to create game');
-                
-                const game = await response.json();
-                gameId = game.game_id;
-                
-                updateStatus(`遊戲已創建: ${gameId}`, 'connected');
-                document.getElementById('info').textContent = `🀄 AI Mahjong Arena | Game: ${gameId.slice(0,8)}...`;
-                
-                // 🔥 自動開始 AI 對戰 loop
-                try {
-                    updateStatus('正在啟動 AI 對戰...', 'connecting');
-                    const aiResponse = await fetch(`${API_URL}/api/debug/start-ai/${gameId}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    if (aiResponse.ok) {
-                        const aiResult = await aiResponse.json();
-                        console.log('AI Started:', aiResult);
-                        updateStatus('AI 對戰已開始！', 'connected');
-                    } else {
-                        console.error('AI start failed:', aiResponse.status);
-                        updateStatus('AI 啟動失敗，但遊戲已創建', 'error');
-                    }
-                } catch (aiError) {
-                    console.error('AI start error:', aiError);
-                    updateStatus('AI 啟動錯誤，但遊戲已創建', 'error');
-                }
-                
-                // Connect WebSocket
-                connectWebSocket();
-                
-                // Enable buttons
-                document.getElementById('startBtn').disabled = true;
-                document.getElementById('drawBtn').disabled = false;
-                document.getElementById('discardBtn').disabled = false;
-                
-            } catch (error) {
-                console.error('Error:', error);
-                updateStatus(`錯誤: ${error.message}`, 'error');
-            }
-        }
-
-        function connectWebSocket() {
-            const wsUrl = `ws://76.13.215.13:8081/ws/game/${gameId}`;
-            ws = new WebSocket(wsUrl);
-            
-            updateWSStatus('connecting');
-            
-            ws.onopen = () => {
-                updateWSStatus('connected');
-                console.log('WebSocket connected');
-            };
-            
-            ws.onmessage = (event) => {
-                const msg = JSON.parse(event.data);
-                handleWSMessage(msg);
-            };
-            
-            ws.onclose = () => {
-                updateWSStatus('disconnected');
-                console.log('WebSocket disconnected');
-            };
-            
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                updateStatus('WebSocket 錯誤', 'error');
-            };
-        }
-
-        function handleWSMessage(msg) {
-            console.log('WS Message:', msg);
-            
-            switch(msg.type) {
-                case 'game_state':
-                    updateGameState(msg.data);
-                    break;
-                case 'ai_thinking':
-                    updateStatus(`${msg.data.player_name} 思考中...`, 'thinking');
-                    break;
-                case 'ai_decision':
-                    updateStatus(`${msg.data.player_name}: ${msg.data.action}`, 'connected');
-                    break;
-                case 'tile_discarded':
-                    addDiscardTile(msg.data.player_id, msg.data.tile);
-                    break;
-                case 'error':
-                    updateStatus(`錯誤: ${msg.data.error}`, 'error');
-                    break;
-            }
-        }
-
-        function updateGameState(state) {
-            console.log('Game state:', state);
-            
-            currentPlayer = state.current_player;
-            
-            // Update hand tiles for player 0
-            if (state.players && state.players[0]) {
-                updatePlayerHand(0, state.players[0].hand);
-            }
-            
-            // Update discards for all players
-            if (state.players) {
-                state.players.forEach((p, i) => {
-                    updatePlayerDiscards(i, p.discards || []);
-                });
-            }
-            
-            // Show game status
-            const statusEl = document.getElementById('gameStatus');
-            statusEl.style.display = 'block';
-            statusEl.textContent = `狀態: ${state.game_status} | 當前: Player ${currentPlayer} | 牌牆: ${state.wall_remaining}`;
-        }
-
-        function updatePlayerHand(pIdx, hand) {
-            // Remove old hand tiles
-            handTiles.forEach(t => scene.remove(t));
-            handTiles = [];
-            
-            // Add new hand tiles
-            hand.forEach((tileId, tIdx) => {
-                const [pos, rot] = getHandPos(pIdx, tIdx);
-                const tile = createTile(tileId, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2], pIdx !== 0);
-                handTiles.push(tile);
-            });
-        }
-
-        function updatePlayerDiscards(pIdx, discards) {
-            // Clear old discards for this player
-            discardTiles.forEach(t => {
-                if (t.userData.playerIdx === pIdx) {
-                    scene.remove(t);
-                }
-            });
-            discardTiles = discardTiles.filter(t => t.userData.playerIdx !== pIdx);
-            
-            // Add new discards
-            discards.forEach((tileId, tIdx) => {
-                const [pos, rot] = getDiscardPos(pIdx, tIdx);
-                const tile = createTile(tileId, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2], false);
-                tile.userData.playerIdx = pIdx;
-                discardTiles.push(tile);
-            });
-        }
-
-        function addDiscardTile(playerId, tileId) {
-            // Find player index
-            const pIdx = 0; // Simplified - would need to match player_id
-            
-            const posList = [[0, 1, 4.2], [4.2, 1, 0], [0, 1, -4.2], [-4.2, 1, 0]];
-            const tIdx = discardTiles.filter(t => t.userData.playerIdx === pIdx).length;
-            
-            const [pos, rot] = getDiscardPos(pIdx, tIdx);
-            const tile = createTile(tileId, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2], false);
-            tile.userData.playerIdx = pIdx;
-            discardTiles.push(tile);
-        }
-
-        async function drawTile() {
-            if (!gameId) return;
-            
-            try {
-                const response = await fetch(`${API_URL}/api/games/${gameId}`);
-                const state = await response.json();
-                updateGameState(state);
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
-
-        async function discardTile() {
-            if (!gameId) return;
-            
-            // For demo, discard a random tile
-            const tiles = ['1W', '2W', '3W', '1D', '2D', '3D', '1S', '2S', '3S'];
-            const tile = tiles[Math.floor(Math.random() * tiles.length)];
-            
-            try {
-                await fetch(`${API_URL}/api/games/${gameId}/action`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        player_id: 'ai-minimax-a-000',
-                        action: 'discard',
-                        tile: tile
-                    })
-                });
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
-
-        function resetGame() {
-            gameId = null;
-            currentPlayer = 0;
-            
-            if (ws) {
-                ws.close();
-                ws = null;
-            }
-            
-            createWall();
-            createDemoTiles();
-            
-            updateStatus('Ready', 'disconnected');
-            updateWSStatus('disconnected');
-            document.getElementById('info').textContent = '🀄 AI Mahjong Arena | Phase: Ready';
-            document.getElementById('gameStatus').style.display = 'none';
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('drawBtn').disabled = true;
-            document.getElementById('discardBtn').disabled = true;
-        }
-
-        function updateStatus(text, type) {
-            const el = document.getElementById('gameStatus');
-            el.style.display = 'block';
-            el.textContent = text;
-            
-            if (type === 'connected') {
-                el.style.background = 'rgba(0,200,100,0.2)';
-                el.style.borderColor = '#00cc66';
-                el.style.color = '#00ff88';
-            } else if (type === 'connecting') {
-                el.style.background = 'rgba(255,170,0,0.2)';
-                el.style.borderColor = '#ffaa00';
-                el.style.color = '#ffaa00';
-            } else if (type === 'error') {
-                el.style.background = 'rgba(200,0,0,0.2)';
-                el.style.borderColor = '#cc0000';
-                el.style.color = '#ff4444';
-            } else if (type === 'thinking') {
-                el.style.background = 'rgba(100,100,200,0.2)';
-                el.style.borderColor = '#6666cc';
-                el.style.color = '#8888ff';
-            }
-        }
-
-        function updateWSStatus(status) {
-            const el = document.getElementById('wsStatus');
-            el.className = `ws-${status}`;
-            
-            if (status === 'connected') {
-                el.textContent = 'WebSocket: Connected';
-            } else if (status === 'connecting') {
-                el.textContent = 'WebSocket: Connecting...';
-            } else {
-                el.textContent = 'WebSocket: Disconnected';
-            }
-        }
-
-        // ============== LOOP ==============
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-        }
-
-        function onResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        init();
-    </script>
+ init();
+ </script>
 </body>
 </html>
